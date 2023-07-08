@@ -1,0 +1,2 @@
+[workspace]
+members = ["cr_tile_game_service","cr_tile_game"]
