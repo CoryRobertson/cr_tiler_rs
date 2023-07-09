@@ -21,11 +21,11 @@ pub struct Tile {
 
 impl Tile {
     /// Generates a new random tile.
-    pub fn random_new() -> Self {
+    pub fn random_new(speed: f32) -> Self {
         Self {
-            distance: 50.0,
+            distance: -TILE_HEIGHT,
             slot: rand::gen_range(0, SLOT_COUNT),
-            speed: 4.0,
+            speed,
         }
     }
 
@@ -36,7 +36,6 @@ impl Tile {
 
     /// Returns true if the tile is overlapping the bar
     pub fn is_hit(&self, slot: u8) -> bool {
-
         if slot != self.slot {
             return false;
         }
@@ -54,7 +53,7 @@ impl Tile {
         {
             let x = self.slot as f32 * TILE_WIDTH;
             let y = self.distance;
-            draw_text(&format!("{},{}", x, y), x as f32, y, 24.0, BLACK);
+            draw_text(&format!("{},{}", x, y), x, y, 24.0, BLACK);
         }
 
         draw_rectangle(

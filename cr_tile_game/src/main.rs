@@ -21,7 +21,7 @@ const SLOT_COUNT: u8 = 3;
 /// The colors representing each tile hit bar
 const COLORS: [Color; SLOT_COUNT as usize] = [ORANGE, BLUE, PURPLE];
 /// The duration in seconds representing how long a key press is held
-const HIT_LENGTH: f32 = 0.4;
+const HIT_LENGTH: f32 = 0.125;
 
 /// const fn to check if the given index would be a out of bounds when referencing a color for a slot.
 /// -> See slot press time update block
@@ -32,8 +32,16 @@ const fn slot_count_check(index: usize) -> bool {
 #[macroquad::main("cr_tile_game")]
 async fn main() {
     let mut state = TileGameState::default();
+
+    request_new_screen_size((SLOT_COUNT as f32 * 100.0) + 100.0, 600.0);
     loop {
         clear_background(GRAY);
+
+
+
+        draw_text(&format!("Score: {}",state.tile_hit_count),220.0,50.0,20.0,BLACK);
+        #[cfg(debug_assertions)]
+        draw_text(&format!("Tile spawn time: {}",state.tile_spawn_time),220.0,70.0,20.0,BLACK);
 
         if is_key_pressed(KeyCode::Escape) {
             exit(0);
@@ -41,7 +49,7 @@ async fn main() {
 
         #[cfg(debug_assertions)]
         if is_key_pressed(KeyCode::B) {
-            state.add_tile();
+            state.add_tile(4.0);
         }
 
         // draw hit bar and take input for hit bar
@@ -90,10 +98,18 @@ async fn main() {
                     );
 
                     // remove tiles which are hit and hit on the slot that is hitting them.
-                    state.tiles = state.tiles.clone().into_iter()
+                    state.tiles = state
+                        .tiles
+                        .clone()
+                        .into_iter()
                         .filter(|tile| {
-                            (!tile.is_hit(index as u8))
-                            // (!tile.is_hit(index) || index != tile.slot as usize)
+                            let hit_state = tile.is_hit(index as u8); // state representing if the given tile is hit
+
+                            if hit_state { // if the tile was hit, increment the hit count
+                                state.tile_hit_count += 1;
+                            }
+
+                            !hit_state // do not keep hit tiles, thus filtering them out when they are hit
                         })
                         .collect();
                 }
