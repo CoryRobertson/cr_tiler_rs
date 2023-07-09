@@ -45,7 +45,6 @@ const fn slot_count_check(index: usize) -> bool {
 async fn main() {
     let mut state = TileGameState::default();
     let mut tick_vol = 1.0;
-
     // load textures and sounds
     {
         let heart_icon =
@@ -100,6 +99,7 @@ async fn main() {
                 }
                 root_ui().slider(hash!(), "Volume", 0.0..1.0, &mut tick_vol);
                 set_sound_volume(*TICK_SOUND.get().unwrap(), tick_vol);
+                set_sound_volume(*ANTITICK_SOUND.get().unwrap(),tick_vol);
 
                 draw_text("Q, W, E to tap respective slot", 5.0, 400.0, 20.0, BLACK);
                 draw_text(
@@ -112,6 +112,9 @@ async fn main() {
             }
             GameState::NormalMode | GameState::HardMode => {
                 clear_background(GRAY);
+                set_sound_volume(*TICK_SOUND.get().unwrap(), tick_vol);
+                set_sound_volume(*ANTITICK_SOUND.get().unwrap(),tick_vol);
+
                 if state.lives < 0 {
                     state.state = GameState::ScoreScreen;
                 }
