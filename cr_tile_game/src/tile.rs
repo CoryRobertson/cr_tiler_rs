@@ -1,5 +1,6 @@
 use crate::{HIT_DISTANCE, MIDDLE_BAR, SLOT_COUNT};
 use macroquad::prelude::{draw_rectangle, draw_text, rand, BLACK, GREEN, RED};
+use macroquad::shapes::draw_rectangle_lines;
 
 /// The width of the tile for spacing purposes
 pub const TILE_WIDTH: f32 = 100.0;
@@ -55,11 +56,13 @@ impl Tile {
             let y = self.distance;
             draw_text(&format!("{},{}", x, y), x, y, 24.0, BLACK);
         }
+        let rect_x = (self.slot as f32 * TILE_WIDTH) + (TILE_MARGIN / 2.0);
+        let width = TILE_WIDTH - TILE_MARGIN;
 
         draw_rectangle(
-            (self.slot as f32 * TILE_WIDTH) + (TILE_MARGIN / 2.0),
+            rect_x,
             self.distance,
-            TILE_WIDTH - TILE_MARGIN,
+            width,
             TILE_HEIGHT,
             {
                 if self.is_hit(self.slot) {
@@ -69,5 +72,6 @@ impl Tile {
                 }
             },
         );
+        draw_rectangle_lines(rect_x,self.distance, width,TILE_HEIGHT,4.0,BLACK);
     }
 }
