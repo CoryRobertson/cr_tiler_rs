@@ -1,6 +1,6 @@
 #![windows_subsystem = "windows"]
 
-use crate::game_state::{GameState, TileGameState};
+use crate::game_state::{Difficulty, GameState, TileGameState};
 use crate::tile::TILE_WIDTH;
 use macroquad::audio::{load_sound_from_bytes, play_sound_once, set_sound_volume, Sound};
 use macroquad::hash;
@@ -30,10 +30,10 @@ const COLORS: [Color; SLOT_COUNT as usize] = [ORANGE, BLUE, PURPLE];
 /// The duration in seconds representing how long a key press is held
 const HIT_LENGTH: f32 = 0.125;
 
-pub static TICK_SOUND: OnceLock<Sound> = OnceLock::new();
-pub static ANTITICK_SOUND: OnceLock<Sound> = OnceLock::new();
-pub static FIRE_ICON: OnceLock<Texture2D> = OnceLock::new();
-pub static HEART_ICON: OnceLock<Texture2D> = OnceLock::new();
+pub(crate) static TICK_SOUND: OnceLock<Sound> = OnceLock::new();
+pub(crate) static ANTI_TICK_SOUND: OnceLock<Sound> = OnceLock::new();
+pub(crate) static FIRE_ICON: OnceLock<Texture2D> = OnceLock::new();
+pub(crate) static HEART_ICON: OnceLock<Texture2D> = OnceLock::new();
 
 /// const fn to check if the given index would be a out of bounds when referencing a color for a slot.
 /// -> See slot press time update block
@@ -62,8 +62,12 @@ async fn main() {
         .unwrap();
         TICK_SOUND.set(tick).unwrap();
 
-        let anti_tick = load_sound_from_bytes(include_bytes!("../assets/mixkit-arcade-game-jump-coin-216-rev.wav")).await.unwrap();
-        ANTITICK_SOUND.set(anti_tick).unwrap();
+        let anti_tick = load_sound_from_bytes(include_bytes!(
+            "../assets/mixkit-arcade-game-jump-coin-216-rev.wav"
+        ))
+        .await
+        .unwrap();
+        ANTI_TICK_SOUND.set(anti_tick).unwrap();
     }
 
     request_new_screen_size((SLOT_COUNT as f32 * 100.0) + 100.0, 600.0);
@@ -73,14 +77,14 @@ async fn main() {
             exit(0);
         }
 
-        match state.state {
+        match state.state.clone() {
             GameState::MainMenu => {
                 clear_background(DARKGRAY);
                 if root_ui().button(
                     Vec2::from_slice(&[(screen_width() / 2.0) - 25.0, screen_height() / 2.0]),
                     "Normal Mode",
                 ) {
-                    state.state = GameState::NormalMode;
+                    state.start_game(Difficulty::Normal);
                 }
                 if root_ui().button(
                     Vec2::from_slice(&[
@@ -89,7 +93,7 @@ async fn main() {
                     ]),
                     "Hard Mode",
                 ) {
-                    state.state = GameState::HardMode;
+                    state.start_game(Difficulty::Hard);
                 }
                 if root_ui().button(None, "Quit") {
                     exit(1);
@@ -99,7 +103,7 @@ async fn main() {
                 }
                 root_ui().slider(hash!(), "Volume", 0.0..1.0, &mut tick_vol);
                 set_sound_volume(*TICK_SOUND.get().unwrap(), tick_vol);
-                set_sound_volume(*ANTITICK_SOUND.get().unwrap(),tick_vol);
+                set_sound_volume(*ANTI_TICK_SOUND.get().unwrap(), tick_vol);
 
                 draw_text("Q, W, E to tap respective slot", 5.0, 400.0, 20.0, BLACK);
                 draw_text(
@@ -110,13 +114,14 @@ async fn main() {
                     BLACK,
                 );
             }
-            GameState::NormalMode | GameState::HardMode => {
+            GameState::Playing(difficulty) => {
                 clear_background(GRAY);
                 set_sound_volume(*TICK_SOUND.get().unwrap(), tick_vol);
-                set_sound_volume(*ANTITICK_SOUND.get().unwrap(),tick_vol);
+                set_sound_volume(*ANTI_TICK_SOUND.get().unwrap(), tick_vol);
 
                 if state.lives < 0 {
                     state.state = GameState::ScoreScreen;
+                    state.game_end_time = SystemTime::now();
                 }
 
                 for a in 0..state.lives {
@@ -159,7 +164,7 @@ async fn main() {
                     state.tile_hit_count += 10;
                 }
 
-                if state.state == GameState::HardMode {
+                if difficulty == Difficulty::Hard {
                     draw_texture(
                         *FIRE_ICON.get().unwrap(),
                         SLOT_COUNT as f32 * 100.0,
@@ -207,8 +212,9 @@ async fn main() {
                             .duration_since(*time)
                             .unwrap()
                             .as_secs_f32()
-                            < HIT_LENGTH
+                            <= HIT_LENGTH
                         {
+                            // draw each slot bar
                             draw_rectangle(
                                 index as f32 * (HIT_BAR_WIDTH / SLOT_COUNT as f32),
                                 HIT_BAR,
@@ -241,9 +247,12 @@ async fn main() {
                 // state management
                 {
                     state.draw_tiles();
-                    state.tick_tiles();
+                    state.tick_game_state();
                     state.cleanup_tiles();
                 }
+
+                // draw border around game so it looks pretty :)
+                draw_rectangle_lines(0.0, 0.0, screen_width(), screen_height(), 8.0, BLACK);
             }
             GameState::ScoreScreen => {
                 clear_background(GRAY);
@@ -255,6 +264,17 @@ async fn main() {
                     BLACK,
                 );
                 draw_text("Press B to go back to main menu", 50.0, 70.0, 20.0, BLACK);
+                let time_survived = state
+                    .game_end_time
+                    .duration_since(state.game_start_time)
+                    .unwrap_or_default();
+                draw_text(
+                    &format!("Time survived: {:.2}s", time_survived.as_secs_f32()),
+                    50.0,
+                    90.0,
+                    20.0,
+                    BLACK,
+                );
             }
         }
 

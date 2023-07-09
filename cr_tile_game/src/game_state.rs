@@ -1,20 +1,27 @@
-use crate::game_state::GameState::HardMode;
+use crate::game_state::GameState::Playing;
 use crate::tile::Tile;
-use crate::{ANTITICK_SOUND, SLOT_COUNT};
+use crate::{ANTI_TICK_SOUND, SLOT_COUNT};
+use macroquad::audio::play_sound_once;
 use rand::prelude::SliceRandom;
 use std::time::SystemTime;
-use macroquad::audio::play_sound_once;
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone)]
+/// The state representing the player is doing.
 pub enum GameState {
     MainMenu,
-    NormalMode,
-    HardMode,
+    Playing(Difficulty),
     ScoreScreen,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub enum Difficulty {
+    Normal,
+    Hard,
 }
 
 /// A struct representing the entire game state.
 pub struct TileGameState {
+    /// The state representing what should be going on e.g. at main menu, or playing in normal mode, or seeing the score screen.
     pub state: GameState,
 
     /// A vector containing all the tiles that are in the game
@@ -36,6 +43,10 @@ pub struct TileGameState {
 
     /// The number of times the player has hit a slot key
     pub slot_clicks: i32,
+
+    pub game_start_time: SystemTime,
+
+    pub game_end_time: SystemTime,
 }
 
 impl Default for TileGameState {
@@ -49,12 +60,24 @@ impl Default for TileGameState {
             tile_hit_count: 0,
             lives: 10,
             slot_clicks: 0,
+            game_start_time: SystemTime::UNIX_EPOCH,
+            game_end_time: SystemTime::now(),
         }
     }
 }
 
 impl TileGameState {
+    pub fn start_game(&mut self, difficulty: Difficulty) {
+        *self = TileGameState::default();
+        if difficulty == Difficulty::Hard {
+            self.tile_hit_count = 30;
+            self.lives = 5;
+        }
+        self.state = Playing(difficulty);
+        self.game_start_time = SystemTime::now();
+    }
 
+    /// Returns the score of the player
     pub fn get_score(&self) -> i32 {
         self.tile_hit_count - self.slot_clicks
     }
@@ -71,13 +94,41 @@ impl TileGameState {
 
     /// Renders every tile in the struct.
     pub fn draw_tiles(&self) {
+        // draw every tile
         self.tiles.iter().for_each(|tile| {
             tile.draw();
         });
     }
 
-    /// Ticks all the tiles in the game state.
-    pub fn tick_tiles(&mut self) {
+    /// Returns the tile speed that new tiles should.
+    fn get_tile_speed(&self) -> f32 {
+        match self.tile_hit_count {
+            ..=20 => 2.0,
+            21..=40 => {
+                const V: [f32; 2] = [2.0, 4.0];
+                match &self.state {
+                    Playing(diff) => match diff {
+                        Difficulty::Normal => 4.0,
+                        Difficulty::Hard => *V.choose(&mut rand::thread_rng()).unwrap_or(&2.0),
+                    },
+                    _ => 4.0,
+                }
+            }
+            41.. => {
+                const V: [f32; 3] = [2.0, 4.0, 6.0];
+                match &self.state {
+                    Playing(diff) => match diff {
+                        Difficulty::Normal => 6.0,
+                        Difficulty::Hard => *V.choose(&mut rand::thread_rng()).unwrap_or(&2.0),
+                    },
+                    _ => 6.0,
+                }
+            }
+        }
+    }
+
+    /// Updates tile spawn time based on players tile hit count.
+    fn update_tile_spawn_time(&mut self) {
         match self.tile_hit_count {
             ..=-1 => {
                 self.tile_spawn_time = 1.75;
@@ -101,51 +152,42 @@ impl TileGameState {
                 self.tile_spawn_time = 0.25;
             }
         }
+    }
 
-        self.tiles.iter_mut().for_each(|tile| tile.tick());
+    /// Ticks all the tiles in the game state.
+    pub fn tick_game_state(&mut self) {
+        self.update_tile_spawn_time(); // update tile spawning rate
+
+        self.tiles.iter_mut().for_each(|tile| tile.tick()); // tick every tile
+
         let time = SystemTime::now()
             .duration_since(self.time_since_tile)
             .unwrap()
             .as_secs_f32();
+
         if time >= self.tile_spawn_time {
+            // decide if we need to spawn a new tile
             self.add_tile({
-                match self.tile_hit_count {
-                    ..=20 => 2.0,
-                    21..=40 => {
-                        const V: [f32; 2] = [2.0, 4.0];
-                        if self.state == HardMode {
-                            *V.choose(&mut rand::thread_rng()).unwrap_or(&2.0)
-                        } else {
-                            4.0
-                        }
-                    }
-                    41.. => {
-                        const V: [f32; 3] = [2.0, 4.0, 6.0];
-                        if self.state == HardMode {
-                            *V.choose(&mut rand::thread_rng()).unwrap_or(&2.0)
-                        } else {
-                            6.0
-                        }
-                    }
-                }
+                self.get_tile_speed() // get a tile speed from the game state
             });
-            self.time_since_tile = SystemTime::now();
+            self.time_since_tile = SystemTime::now(); // update the time it has been since the last tile was spawned
         }
     }
 
     /// Removes all the tiles that are off screen.
     pub fn cleanup_tiles(&mut self) {
-        self.tiles = self
+        self.tiles = self // set the tile list to a new tile list clone
             .tiles
             .clone()
             .into_iter()
             .filter(|tile| {
-                let distance_state = tile.distance < 600.0;
+                // filter out every tile that is below the screen margin
+                let distance_state = tile.distance < 600.0; // state determining if the tile is off bottom of screen
 
                 if !distance_state {
-                    self.tile_hit_count -= 1;
+                    // if the tile is, then play a sound, reduce the score, and remove a life
                     self.lives -= 1;
-                    play_sound_once(*ANTITICK_SOUND.get().unwrap());
+                    play_sound_once(*ANTI_TICK_SOUND.get().unwrap());
                 }
 
                 distance_state

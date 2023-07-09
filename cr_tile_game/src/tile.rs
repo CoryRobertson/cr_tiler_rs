@@ -59,19 +59,14 @@ impl Tile {
         let rect_x = (self.slot as f32 * TILE_WIDTH) + (TILE_MARGIN / 2.0);
         let width = TILE_WIDTH - TILE_MARGIN;
 
-        draw_rectangle(
-            rect_x,
-            self.distance,
-            width,
-            TILE_HEIGHT,
-            {
-                if self.is_hit(self.slot) {
-                    GREEN
-                } else {
-                    RED
-                }
-            },
-        );
-        draw_rectangle_lines(rect_x,self.distance, width,TILE_HEIGHT,4.0,BLACK);
+        draw_rectangle(rect_x, self.distance, width, TILE_HEIGHT, {
+            if self.is_hit(self.slot) {
+                GREEN
+            } else {
+                RED
+            }
+        });
+
+        draw_rectangle_lines(rect_x, self.distance, width, TILE_HEIGHT, 4.0, BLACK);
     }
 }
