@@ -8,6 +8,7 @@ use macroquad::prelude::*;
 use macroquad::ui::root_ui;
 use std::iter::Iterator;
 use std::process::exit;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::OnceLock;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
@@ -19,26 +20,36 @@ mod tile;
 const HIT_BAR: f32 = 550.0;
 /// The height of the hit bar, larger hit distance would make hitting tiles easier
 const HIT_DISTANCE: f32 = 25.0;
-/// The width of the hit bar
-const HIT_BAR_WIDTH: f32 = TILE_WIDTH * SLOT_COUNT as f32;
 /// The location on the y axis representing the middle of the hit bar, used for distance calculations
 const MIDDLE_BAR: f32 = HIT_BAR + (HIT_DISTANCE / 2.0);
 /// The number of slots for tiles, the width of the game
-const SLOT_COUNT: u8 = 3;
+static SLOT_COUNT: AtomicU8 = AtomicU8::new(3);
 /// The colors representing each tile hit bar
-const COLORS: [Color; SLOT_COUNT as usize] = [ORANGE, BLUE, PURPLE];
+const COLORS: [Color; 5] = [ORANGE, BLUE, PURPLE, PINK, YELLOW];
 /// The duration in seconds representing how long a key press is held
 const HIT_LENGTH: f32 = 0.125;
+/// The keybindings relating to each slot.
+const KEY_BINDS: [KeyCode; 5] = [KeyCode::Q, KeyCode::W, KeyCode::E, KeyCode::R, KeyCode::T];
 
 pub(crate) static TICK_SOUND: OnceLock<Sound> = OnceLock::new();
 pub(crate) static ANTI_TICK_SOUND: OnceLock<Sound> = OnceLock::new();
 pub(crate) static FIRE_ICON: OnceLock<Texture2D> = OnceLock::new();
 pub(crate) static HEART_ICON: OnceLock<Texture2D> = OnceLock::new();
 
-/// const fn to check if the given index would be a out of bounds when referencing a color for a slot.
+/// fn to check if the given index would be a out of bounds when referencing a color for a slot.
 /// -> See slot press time update block
-const fn slot_count_check(index: usize) -> bool {
-    index < SLOT_COUNT as usize
+fn slot_count_check(index: usize) -> bool {
+    index < SLOT_COUNT.load(Ordering::Relaxed) as usize
+}
+
+/// Gets the color of the slot, wrapped with the length just in-case ;)
+pub const fn get_color(index: usize) -> Color {
+    COLORS[index % COLORS.len()]
+}
+
+/// The width of the hit bar, not a single hit bar, but the entire bar.
+fn get_hit_bar_width() -> f32 {
+    TILE_WIDTH * SLOT_COUNT.load(Ordering::Relaxed) as f32
 }
 
 #[macroquad::main("cr_tile_game")]
@@ -70,9 +81,14 @@ async fn main() {
         ANTI_TICK_SOUND.set(anti_tick).unwrap();
     }
 
-    request_new_screen_size((SLOT_COUNT as f32 * 100.0) + 100.0, 600.0);
+    // set screen size to a size that will show every tile
+    request_new_screen_size(
+        (SLOT_COUNT.load(Ordering::Relaxed) as f32 * 100.0) + 100.0,
+        600.0,
+    );
 
     loop {
+        // quit game key bind
         if is_key_pressed(KeyCode::Escape) {
             exit(0);
         }
@@ -80,32 +96,55 @@ async fn main() {
         match state.state.clone() {
             GameState::MainMenu => {
                 clear_background(DARKGRAY);
-                if root_ui().button(
-                    Vec2::from_slice(&[(screen_width() / 2.0) - 25.0, screen_height() / 2.0]),
-                    "Normal Mode",
-                ) {
-                    state.start_game(Difficulty::Normal);
+
+                // start game buttons
+                {
+                    if root_ui().button(
+                        Vec2::from_slice(&[(screen_width() / 2.0) - 25.0, screen_height() / 2.0]),
+                        "Normal Mode",
+                    ) {
+                        state.start_game(Difficulty::Normal);
+                    }
+                    if root_ui().button(
+                        Vec2::from_slice(&[
+                            (screen_width() / 2.0) - 25.0,
+                            (screen_height() / 2.0) + 25.0,
+                        ]),
+                        "Hard Mode",
+                    ) {
+                        state.start_game(Difficulty::Hard);
+                    }
                 }
-                if root_ui().button(
-                    Vec2::from_slice(&[
-                        (screen_width() / 2.0) - 25.0,
-                        (screen_height() / 2.0) + 25.0,
-                    ]),
-                    "Hard Mode",
-                ) {
-                    state.start_game(Difficulty::Hard);
-                }
+
                 if root_ui().button(None, "Quit") {
                     exit(1);
                 }
                 if root_ui().button(None, "Test Sound") {
                     play_sound_once(*TICK_SOUND.get().unwrap());
                 }
-                root_ui().slider(hash!(), "Volume", 0.0..1.0, &mut tick_vol);
+                root_ui().slider(hash!(), "Volume", 0.0..1.0, &mut tick_vol); // volume slider
+                let slot_count_load = SLOT_COUNT.load(Ordering::Relaxed);
+
+                // block for changing slot count
+                {
+                    if root_ui().button(None, "+ Slot") && slot_count_load <= 4 {
+                        SLOT_COUNT.fetch_add(1, Ordering::Relaxed);
+                    }
+                    draw_text(
+                        &format!("{}", SLOT_COUNT.load(Ordering::Relaxed)),
+                        50.0,
+                        80.0,
+                        20.0,
+                        BLACK,
+                    );
+                    if root_ui().button(None, "- Slot") && slot_count_load >= 2 {
+                        SLOT_COUNT.fetch_sub(1, Ordering::Relaxed);
+                    }
+                }
+
                 set_sound_volume(*TICK_SOUND.get().unwrap(), tick_vol);
                 set_sound_volume(*ANTI_TICK_SOUND.get().unwrap(), tick_vol);
 
-                draw_text("Q, W, E to tap respective slot", 5.0, 400.0, 20.0, BLACK);
                 draw_text(
                     "B to go back to main menu, ESC to close game",
                     5.0,
@@ -116,18 +155,21 @@ async fn main() {
             }
             GameState::Playing(difficulty) => {
                 clear_background(GRAY);
+                let bar_width = get_hit_bar_width();
                 set_sound_volume(*TICK_SOUND.get().unwrap(), tick_vol);
                 set_sound_volume(*ANTI_TICK_SOUND.get().unwrap(), tick_vol);
 
+                // stop the game when the lives are less than 0
                 if state.lives < 0 {
                     state.state = GameState::ScoreScreen;
                     state.game_end_time = SystemTime::now();
                 }
 
+                // draw each heart for every life the player has
                 for a in 0..state.lives {
                     draw_texture(
                         *HEART_ICON.get().unwrap(),
-                        SLOT_COUNT as f32 * 100.0,
+                        SLOT_COUNT.load(Ordering::Relaxed) as f32 * 100.0,
                         100.0 + (HEART_ICON.get().unwrap().height() * a as f32),
                         WHITE,
                     );
@@ -135,39 +177,39 @@ async fn main() {
 
                 draw_text(
                     &format!("Score: {}", state.get_score()),
-                    310.0,
+                    bar_width,
                     50.0,
                     20.0,
                     BLACK,
                 );
-                #[cfg(debug_assertions)]
-                draw_text(
-                    &format!("DEBUG TST: {}", state.tile_spawn_time),
-                    220.0,
-                    70.0,
-                    20.0,
-                    BLACK,
-                );
 
-                #[cfg(debug_assertions)]
-                if is_key_pressed(KeyCode::G) {
-                    state.add_tile(4.0);
+                #[cfg(debug_assertions)] // debug info
+                {
+                    draw_text(
+                        &format!("DEBUG TST: {}", state.tile_spawn_time),
+                        220.0,
+                        70.0,
+                        20.0,
+                        BLACK,
+                    );
+                    if is_key_pressed(KeyCode::G) {
+                        state.add_tile(4.0);
+                    }
+
+                    if is_key_pressed(KeyCode::H) {
+                        state.lives -= 1;
+                    }
+
+                    if is_key_pressed(KeyCode::A) {
+                        state.tile_hit_count += 10;
+                    }
                 }
 
-                #[cfg(debug_assertions)]
-                if is_key_pressed(KeyCode::H) {
-                    state.lives -= 1;
-                }
-
-                #[cfg(debug_assertions)]
-                if is_key_pressed(KeyCode::A) {
-                    state.tile_hit_count += 10;
-                }
-
+                // draw fire when the difficulty is on hard mode
                 if difficulty == Difficulty::Hard {
                     draw_texture(
                         *FIRE_ICON.get().unwrap(),
-                        SLOT_COUNT as f32 * 100.0,
+                        SLOT_COUNT.load(Ordering::Relaxed) as f32 * 100.0,
                         screen_height() - 150.0,
                         WHITE,
                     );
@@ -175,36 +217,67 @@ async fn main() {
 
                 // draw hit bar and take input for hit bar
                 {
-                    draw_rectangle(0.0, HIT_BAR, HIT_BAR_WIDTH, HIT_DISTANCE, BLACK); // draw the hit bar
+                    let slot_count = SLOT_COUNT.load(Ordering::Relaxed);
+                    draw_rectangle(0.0, HIT_BAR, bar_width, HIT_DISTANCE, BLACK); // draw the hit bar
+                    for slot in 0..slot_count {
+                        let x_value = (slot as f32 * TILE_WIDTH) // the respective x value of every slot
+                            + (TILE_WIDTH / 2.0) // add half a tile width so we can put the text in the middle of a slot
+                            - 5.0; // slight magic number to make the text more centered.
+                        draw_text(
+                            {
+                                // render text based on the slot its in
+                                match slot {
+                                    0 => "Q",
+                                    1 => "W",
+                                    2 => "E",
+                                    3 => "R",
+                                    4 => "T",
+                                    _ => "???", // unknown slot number ???
+                                }
+                            },
+                            x_value,
+                            590.0,
+                            20.0,
+                            BLACK,
+                        );
+                        draw_rectangle(
+                            (slot as f32 * TILE_WIDTH) - 1.0,
+                            0.0,
+                            2.0,
+                            screen_height(),
+                            DARKGRAY,
+                        );
+                    }
+                    draw_rectangle(
+                        ((slot_count) as f32 * TILE_WIDTH) - 1.0,
+                        0.0,
+                        2.0,
+                        screen_height(),
+                        DARKGRAY,
+                    );
 
                     // slot press time updates for key presses
-                    {
-                        if is_key_pressed(KeyCode::Q) && slot_count_check(0) {
-                            state.slot_press_time[0] = SystemTime::now();
-                            state.slot_clicks += 1;
-                        }
-
-                        if is_key_pressed(KeyCode::W) && slot_count_check(1) {
-                            state.slot_press_time[1] = SystemTime::now();
-                            state.slot_clicks += 1;
-                        }
-
-                        if is_key_pressed(KeyCode::E) && slot_count_check(2) {
-                            state.slot_press_time[2] = SystemTime::now();
-                            state.slot_clicks += 1;
-                        }
-
-                        if is_key_pressed(KeyCode::R) && slot_count_check(3) {
-                            state.slot_press_time[3] = SystemTime::now();
-                            state.slot_clicks += 1;
+                    for (index, key) in KEY_BINDS.iter().enumerate() {
+                        // iterate through every key bind, checking if the respective key was pressed
+                        if is_key_pressed(*key) && slot_count_check(index) {
+                            match state.slot_press_time.get_mut(index) {
+                                None => {
+                                    // if no slot press time exists for this key, add one just in-case
+                                    state.slot_press_time.push(SystemTime::now());
+                                }
+                                Some(time) => {
+                                    // if a time does exist, update it
+                                    *time = SystemTime::now();
+                                }
+                            }
+                            state.slot_clicks += 1; // increment the slot click count when a slot is clicked
                         }
                     }
 
-                    // make iterators for color and slot time
-                    let color_iter = COLORS.iter();
-                    let mut slot_time_iter = state.slot_press_time.iter();
-                    // combine both iterators laterally -> (color,slot time)
-                    let combined = color_iter.map(|color| (color, slot_time_iter.next().unwrap()));
+                    let slot_time_iter = state.slot_press_time.iter();
+                    let combined = slot_time_iter
+                        .enumerate()
+                        .map(|(index, time)| (get_color(index), time)); // create an iterator that has every color and its respective time it was clicked
 
                     // iterate over each slot time and color, and if the time listed as the last time the slot was pressed is less than HIT_LENGTH in time, then draw the respective color.
                     combined.enumerate().for_each(|(index, (color, time))| {
@@ -212,15 +285,22 @@ async fn main() {
                             .duration_since(*time)
                             .unwrap()
                             .as_secs_f32()
-                            <= HIT_LENGTH
+                            <= {
+                                // change the hit length depending on difficulty, experimental??
+                                match difficulty {
+                                    Difficulty::Normal => HIT_LENGTH,
+                                    Difficulty::Hard => HIT_LENGTH / 10.0,
+                                }
+                            }
                         {
                             // draw each slot bar
+                            let x_value = index as f32 * (bar_width / slot_count as f32);
                             draw_rectangle(
-                                index as f32 * (HIT_BAR_WIDTH / SLOT_COUNT as f32),
+                                x_value,
                                 HIT_BAR,
-                                HIT_BAR_WIDTH / SLOT_COUNT as f32,
+                                bar_width / slot_count as f32,
                                 HIT_DISTANCE,
-                                *color,
+                                color,
                             );
 
                             // remove tiles which are hit and hit on the slot that is hitting them.
@@ -278,8 +358,10 @@ async fn main() {
             }
         }
 
+        // allow the game to be exited to the main menu
         if is_key_pressed(KeyCode::B) {
             state = TileGameState::default();
+            request_new_screen_size(400.0, 600.0);
         }
 
         #[cfg(debug_assertions)]

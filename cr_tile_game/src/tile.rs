@@ -1,6 +1,7 @@
-use crate::{HIT_DISTANCE, MIDDLE_BAR, SLOT_COUNT};
+use crate::{get_color, HIT_DISTANCE, MIDDLE_BAR, SLOT_COUNT};
 use macroquad::prelude::*;
 use macroquad::shapes::draw_rectangle_lines;
+use std::sync::atomic::Ordering;
 
 /// The width of the tile for spacing purposes
 pub const TILE_WIDTH: f32 = 100.0;
@@ -25,7 +26,7 @@ impl Tile {
     pub fn random_new(speed: f32) -> Self {
         Self {
             distance: -TILE_HEIGHT,
-            slot: rand::gen_range(0, SLOT_COUNT),
+            slot: rand::gen_range(0, SLOT_COUNT.load(Ordering::Relaxed)),
             speed,
         }
     }
@@ -59,14 +60,32 @@ impl Tile {
         let rect_x = (self.slot as f32 * TILE_WIDTH) + (TILE_MARGIN / 2.0);
         let width = TILE_WIDTH - TILE_MARGIN;
 
+        let color = get_color(self.slot as usize);
+        let is_hit = self.is_hit(self.slot);
+
         draw_rectangle(rect_x, self.distance, width, TILE_HEIGHT, {
-            if self.is_hit(self.slot) {
-                GREEN
-            } else {
-                RED
-            }
+            Color::new(color.r, color.g, color.b, 0.5)
         });
 
-        draw_rectangle_lines(rect_x, self.distance, width, TILE_HEIGHT, 4.0, BLACK);
+        draw_rectangle_lines(
+            rect_x,
+            self.distance,
+            width,
+            TILE_HEIGHT,
+            {
+                // make thickness react to when the tile is hit
+                match is_hit {
+                    true => 6.0,
+                    false => 4.0,
+                }
+            },
+            {
+                // make color react when tile is hit
+                match is_hit {
+                    true => BLACK,
+                    false => DARKGRAY,
+                }
+            },
+        );
     }
 }

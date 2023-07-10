@@ -2,7 +2,9 @@ use crate::game_state::GameState::Playing;
 use crate::tile::Tile;
 use crate::{ANTI_TICK_SOUND, SLOT_COUNT};
 use macroquad::audio::play_sound_once;
+use macroquad::prelude::request_new_screen_size;
 use rand::prelude::SliceRandom;
+use std::sync::atomic::Ordering;
 use std::time::SystemTime;
 
 #[derive(PartialEq, Eq, Clone)]
@@ -27,7 +29,7 @@ pub struct TileGameState {
     /// A vector containing all the tiles that are in the game
     pub tiles: Vec<Tile>,
     /// An array that is the size of the number of slots in the game, which has contents that represent the time since the last slot has been pressed
-    pub slot_press_time: [SystemTime; SLOT_COUNT as usize],
+    pub slot_press_time: Vec<SystemTime>,
 
     /// The time since the last tile was spawned
     time_since_tile: SystemTime,
@@ -75,6 +77,13 @@ impl TileGameState {
         }
         self.state = Playing(difficulty);
         self.game_start_time = SystemTime::now();
+        request_new_screen_size(
+            (SLOT_COUNT.load(Ordering::Relaxed) as f32 * 100.0) + 100.0,
+            600.0,
+        );
+        for _ in 0..(SLOT_COUNT.load(Ordering::Relaxed) as usize - self.slot_press_time.len()) {
+            self.slot_press_time.push(SystemTime::UNIX_EPOCH);
+        }
     }
 
     /// Returns the score of the player
@@ -83,8 +92,8 @@ impl TileGameState {
     }
 
     /// Returns a new basic slot press time, which is an array of system times representing the time since that slot has been pressed.
-    pub const fn new_slot_press_time() -> [SystemTime; SLOT_COUNT as usize] {
-        [SystemTime::UNIX_EPOCH; SLOT_COUNT as usize]
+    pub const fn new_slot_press_time() -> Vec<SystemTime> {
+        vec![]
     }
 
     /// Adds a tile to the g ame state.
