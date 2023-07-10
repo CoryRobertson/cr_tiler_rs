@@ -355,6 +355,7 @@ async fn main() {
                     20.0,
                     BLACK,
                 );
+                draw_text(&format!("Slot count: {}", SLOT_COUNT.load(Ordering::Relaxed)),50.0,110.0,20.0,BLACK);
             }
         }
 
