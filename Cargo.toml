@@ -3,6 +3,6 @@ members = ["cr_tile_game_service","cr_tile_game"]
 
 [profile.release]
 lto = true
-opt-level = "z"
+opt-level = 3
 codegen-units = 1
 strip = true
