@@ -8,4 +8,7 @@ edition = "2021"
 [dependencies]
 macroquad = "0.3.25"
 rand = "0.8.5"
-qcell = "0.5.3"
+qcell = "0.5.3" # unused at the moment
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1.12" # for adding program icon to compiled binary

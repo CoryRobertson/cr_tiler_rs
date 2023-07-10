@@ -1,5 +1,5 @@
 use crate::{HIT_DISTANCE, MIDDLE_BAR, SLOT_COUNT};
-use macroquad::prelude::{draw_rectangle, draw_text, rand, BLACK, GREEN, RED};
+use macroquad::prelude::*;
 use macroquad::shapes::draw_rectangle_lines;
 
 /// The width of the tile for spacing purposes
