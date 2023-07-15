@@ -1,13 +1,13 @@
-use std::net::TcpStream;
 use crate::game_state::GameState::Playing;
 use crate::tile::Tile;
 use crate::{ANTI_TICK_SOUND, SLOT_COUNT};
+use cr_tile_game_service::packet::{GameDataPacket, LoginInfo};
 use macroquad::audio::play_sound_once;
 use macroquad::prelude::request_new_screen_size;
 use rand::prelude::SliceRandom;
+use std::net::TcpStream;
 use std::sync::atomic::Ordering;
 use std::time::SystemTime;
-use cr_tile_game_service::packet::{GameDataPacket, LoginInfo};
 
 #[derive(PartialEq, Eq, Clone)]
 /// The state representing the player is doing.
@@ -60,7 +60,6 @@ pub struct TileGameState {
 }
 
 impl Default for TileGameState {
-
     fn default() -> Self {
         Self {
             state: GameState::MainMenu,
@@ -80,9 +79,11 @@ impl Default for TileGameState {
 }
 
 impl TileGameState {
-
     pub fn to_packet(&self) -> GameDataPacket {
-        GameDataPacket{ score: self.get_score(), login_info: self.login_info.clone() }
+        GameDataPacket {
+            score: self.get_score(),
+            login_info: self.login_info.clone(),
+        }
     }
 
     pub fn start_game(&mut self, difficulty: Difficulty, will_connect: bool) {

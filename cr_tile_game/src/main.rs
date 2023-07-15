@@ -1,20 +1,18 @@
 #![windows_subsystem = "windows"]
 
-use std::io::{Read, Write};
 use crate::game_state::{Difficulty, GameState, TileGameState};
 use crate::tile::TILE_WIDTH;
 use macroquad::audio::{load_sound_from_bytes, play_sound_once, set_sound_volume, Sound};
 use macroquad::hash;
 use macroquad::prelude::*;
 use macroquad::ui::root_ui;
+use std::io::{Read, Write};
 use std::iter::Iterator;
-use std::net::TcpStream;
 use std::process::exit;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::OnceLock;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
-use cr_tile_game_service::packet::GameDataPacket;
 
 mod game_state;
 mod tile;
@@ -149,10 +147,10 @@ async fn main() {
                 set_sound_volume(*TICK_SOUND.get().unwrap(), tick_vol);
                 set_sound_volume(*ANTI_TICK_SOUND.get().unwrap(), tick_vol);
 
-                root_ui().checkbox(hash!(),"will connect", &mut will_connect);
+                root_ui().checkbox(hash!(), "will connect", &mut will_connect);
 
-                root_ui().input_text(hash!(),"Name", &mut state.login_info.user_name);
-                root_ui().input_password(hash!(),"Pass", &mut state.login_info.key);
+                root_ui().input_text(hash!(), "Name", &mut state.login_info.user_name);
+                root_ui().input_password(hash!(), "Pass", &mut state.login_info.key);
 
                 draw_text(
                     "B to go back to main menu, ESC to close game",
@@ -178,7 +176,7 @@ async fn main() {
                             let ser = serde_json::to_string(&packet).unwrap();
                             dbg!(&ser);
                             let _ = client.write(ser.as_bytes());
-                            let mut buf: [u8 ; 1024] = [0 ; 1024];
+                            let mut buf: [u8; 1024] = [0; 1024];
                             let _ = client.read(&mut buf);
                         }
                     }
@@ -376,7 +374,13 @@ async fn main() {
                     20.0,
                     BLACK,
                 );
-                draw_text(&format!("Slot count: {}", SLOT_COUNT.load(Ordering::Relaxed)),50.0,110.0,20.0,BLACK);
+                draw_text(
+                    &format!("Slot count: {}", SLOT_COUNT.load(Ordering::Relaxed)),
+                    50.0,
+                    110.0,
+                    20.0,
+                    BLACK,
+                );
             }
         }
 

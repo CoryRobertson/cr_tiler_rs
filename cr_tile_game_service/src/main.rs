@@ -1,9 +1,8 @@
+use crate::packet::{GameDataPacket, LoginInfo};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::str::from_utf8;
 use std::thread;
 use std::thread::JoinHandle;
-use crate::packet::{GameDataPacket, LoginInfo};
 
 pub mod packet;
 
@@ -12,7 +11,7 @@ fn main() {
     let mut thread_vec = vec![];
 
     for income in listener.incoming() {
-        thread_vec.retain(|thread: &JoinHandle<()>| !thread.is_finished() );
+        thread_vec.retain(|thread: &JoinHandle<()>| !thread.is_finished());
 
         let handle = thread::spawn(move || {
             let stream = income.expect("Failed to receive tcp stream");
@@ -28,11 +27,8 @@ fn main() {
 }
 
 fn handle_client(mut stream: TcpStream) {
-    let mut buf: [u8 ; 1024] = [ 0 ; 1024 ];
-    let ip = stream
-        .peer_addr()
-        .expect("Unable to get peer address")
-        .ip();
+    let mut buf: [u8; 1024] = [0; 1024];
+    let ip = stream.peer_addr().expect("Unable to get peer address").ip();
 
     let mut login_info: LoginInfo = LoginInfo::default();
 
@@ -47,7 +43,6 @@ fn handle_client(mut stream: TcpStream) {
                             // db here
                             login_info = packet.login_info.clone();
                             dbg!(packet);
-
                         }
                         Err(err) => {
                             println!("{}", err);
