@@ -1,5 +1,6 @@
 #![windows_subsystem = "windows"]
 
+use std::io::{Read, Write};
 use crate::game_state::{Difficulty, GameState, TileGameState};
 use crate::tile::TILE_WIDTH;
 use macroquad::audio::{load_sound_from_bytes, play_sound_once, set_sound_volume, Sound};
@@ -7,11 +8,13 @@ use macroquad::hash;
 use macroquad::prelude::*;
 use macroquad::ui::root_ui;
 use std::iter::Iterator;
+use std::net::TcpStream;
 use std::process::exit;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::OnceLock;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
+use cr_tile_game_service::packet::GameDataPacket;
 
 mod game_state;
 mod tile;
@@ -56,6 +59,7 @@ fn get_hit_bar_width() -> f32 {
 async fn main() {
     let mut state = TileGameState::default();
     let mut tick_vol = 1.0;
+    let mut will_connect = false;
     // load textures and sounds
     {
         let heart_icon =
@@ -103,7 +107,7 @@ async fn main() {
                         Vec2::from_slice(&[(screen_width() / 2.0) - 25.0, screen_height() / 2.0]),
                         "Normal Mode",
                     ) {
-                        state.start_game(Difficulty::Normal);
+                        state.start_game(Difficulty::Normal, will_connect);
                     }
                     if root_ui().button(
                         Vec2::from_slice(&[
@@ -112,7 +116,7 @@ async fn main() {
                         ]),
                         "Hard Mode",
                     ) {
-                        state.start_game(Difficulty::Hard);
+                        state.start_game(Difficulty::Hard, will_connect);
                     }
                 }
 
@@ -145,6 +149,11 @@ async fn main() {
                 set_sound_volume(*TICK_SOUND.get().unwrap(), tick_vol);
                 set_sound_volume(*ANTI_TICK_SOUND.get().unwrap(), tick_vol);
 
+                root_ui().checkbox(hash!(),"will connect", &mut will_connect);
+
+                root_ui().input_text(hash!(),"Name", &mut state.login_info.user_name);
+                root_ui().input_password(hash!(),"Pass", &mut state.login_info.key);
+
                 draw_text(
                     "B to go back to main menu, ESC to close game",
                     5.0,
@@ -162,6 +171,17 @@ async fn main() {
                 // stop the game when the lives are less than 0
                 if state.lives < 0 {
                     state.state = GameState::ScoreScreen;
+                    let packet = state.to_packet();
+                    match &mut state.client {
+                        None => {}
+                        Some(client) => {
+                            let ser = serde_json::to_string(&packet).unwrap();
+                            dbg!(&ser);
+                            let _ = client.write(ser.as_bytes());
+                            let mut buf: [u8 ; 1024] = [0 ; 1024];
+                            let _ = client.read(&mut buf);
+                        }
+                    }
                     state.game_end_time = SystemTime::now();
                 }
 
@@ -192,6 +212,7 @@ async fn main() {
                         20.0,
                         BLACK,
                     );
+
                     if is_key_pressed(KeyCode::G) {
                         state.add_tile(4.0);
                     }

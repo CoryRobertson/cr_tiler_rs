@@ -1,3 +1,4 @@
+use std::net::TcpStream;
 use crate::game_state::GameState::Playing;
 use crate::tile::Tile;
 use crate::{ANTI_TICK_SOUND, SLOT_COUNT};
@@ -6,6 +7,7 @@ use macroquad::prelude::request_new_screen_size;
 use rand::prelude::SliceRandom;
 use std::sync::atomic::Ordering;
 use std::time::SystemTime;
+use cr_tile_game_service::packet::{GameDataPacket, LoginInfo};
 
 #[derive(PartialEq, Eq, Clone)]
 /// The state representing the player is doing.
@@ -46,12 +48,19 @@ pub struct TileGameState {
     /// The number of times the player has hit a slot key
     pub slot_clicks: i32,
 
+    /// The time that the game started at
     pub game_start_time: SystemTime,
 
+    /// The time that the game ended at
     pub game_end_time: SystemTime,
+
+    pub client: Option<TcpStream>,
+
+    pub login_info: LoginInfo,
 }
 
 impl Default for TileGameState {
+
     fn default() -> Self {
         Self {
             state: GameState::MainMenu,
@@ -64,13 +73,25 @@ impl Default for TileGameState {
             slot_clicks: 0,
             game_start_time: SystemTime::UNIX_EPOCH,
             game_end_time: SystemTime::now(),
+            client: None,
+            login_info: LoginInfo::default(),
         }
     }
 }
 
 impl TileGameState {
-    pub fn start_game(&mut self, difficulty: Difficulty) {
+
+    pub fn to_packet(&self) -> GameDataPacket {
+        GameDataPacket{ score: self.get_score(), login_info: self.login_info.clone() }
+    }
+
+    pub fn start_game(&mut self, difficulty: Difficulty, will_connect: bool) {
+        let login = self.login_info.clone();
         *self = TileGameState::default();
+        if will_connect {
+            self.client = Some(TcpStream::connect("localhost:8114").unwrap());
+            self.login_info = login;
+        }
         if difficulty == Difficulty::Hard {
             self.tile_hit_count = 30;
             self.lives = 5;
