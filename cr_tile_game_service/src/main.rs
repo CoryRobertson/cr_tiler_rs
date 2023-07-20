@@ -50,6 +50,8 @@ fn main() {
     let db_client = Arc::new(Mutex::new(client));
     let mut thread_vec = vec![];
 
+    println!("Listening for players on port 8222");
+
     for income in listener.incoming() {
         thread_vec.retain(|thread: &JoinHandle<()>| !thread.is_finished());
 
