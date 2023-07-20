@@ -112,13 +112,18 @@ impl TileGameState {
     }
 
     pub fn connect_client(&mut self) -> Result<(), ClientError> {
+        let ip = self.ip_address.clone();
+        println!("{}", ip);
         match self.client.get_mut() {
-            None => match TcpStream::connect(self.ip_address.clone()) {
+            None => match TcpStream::connect(&ip) {
                 Ok(client) => {
                     self.client.set(Some(client));
                     Ok(())
                 }
-                Err(_) => Err(ClientError::FailedToConnect),
+                Err(err) => {
+                    println!("{}",err);
+                    Err(ClientError::FailedToConnect)
+                },
             },
             Some(_) => Ok(()),
         }
@@ -200,6 +205,7 @@ impl TileGameState {
             login_info: self.login_info.clone(),
             state: Playing(difficulty.clone()),
             game_start_time: SystemTime::now(),
+            ip_address: self.ip_address.clone(),
             ..Default::default()
         };
 

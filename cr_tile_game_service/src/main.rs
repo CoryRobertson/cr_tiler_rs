@@ -1,11 +1,13 @@
 use cr_tile_game_common::leader_board_stat::{LeaderBoardEntry, LeaderBoardList};
 use cr_tile_game_common::packet::{ClientPacket, LoginInfo, ServerPacket};
-use smol_db_client::{Client, DBPacketResponse};
+use smol_db_client::{Client, DBPacketResponse, DBPacketResponseError};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::thread::JoinHandle;
+use std::thread::{JoinHandle, sleep};
+use std::time::Duration;
+use smol_db_client::db_settings::DBSettings;
 
 const DB_NAME: &str = "cr_tile_game_db";
 const DB_KEY: &str = "cr_tile_game_service";
@@ -32,7 +34,21 @@ fn setup_client(client: &mut Client) {
     // validate that the db is present in the list
     match client.list_db() {
         Ok(list) => {
-            assert!(list.iter().any(|db_info| db_info.get_db_name() == DB_NAME));
+            if !list.iter().any(|db_info| db_info.get_db_name() == DB_NAME) {
+                match client.create_db(DB_NAME,DBSettings::new(
+                    Duration::from_secs(30),
+                    (false,false,false),
+                    (false,false,false),
+                    vec![DB_KEY.to_string()],
+                    vec![])).unwrap() {
+                    DBPacketResponse::Error(err) => {
+                        assert_eq!(err, DBPacketResponseError::DBAlreadyExists);
+                    }
+                    _ => {
+                        println!("DB Created...");
+                    }
+                }
+            }
         }
         Err(err) => {
             panic!("Failed to list db from db: {:?}", err);
@@ -43,14 +59,34 @@ fn setup_client(client: &mut Client) {
 fn main() {
     let listener = TcpListener::bind("0.0.0.0:8114").unwrap();
 
-    let mut client = Client::new("localhost:8222").unwrap();
+    let mut client = {
+        let mut count = 0;
+        loop {
+            if count >= 10 {
+                panic!("Unable to connect to db after 10 retries");
+            }
+            let client_result = Client::new("localhost:8222");
+            match client_result {
+                Ok(client) => { break client;}
+                Err(_) => {
+                    let client_result_docker_attempt = Client::new("db:8222");
+                    if let Ok(client) = client_result_docker_attempt {
+                        break client;
+                    }
+                    println!("Waiting one second for db connection and attempting to try again...");
+                    count += 1;
+                    sleep(Duration::from_secs(1));
+                }
+            }
+        }
+    };
 
     setup_client(&mut client);
 
     let db_client = Arc::new(Mutex::new(client));
     let mut thread_vec = vec![];
 
-    println!("Listening for players on port 8222");
+    println!("Listening for players on port 8114");
 
     for income in listener.incoming() {
         thread_vec.retain(|thread: &JoinHandle<()>| !thread.is_finished());
@@ -104,7 +140,33 @@ fn handle_client(mut stream: TcpStream, client: Arc<Mutex<Client>>) {
                                         {
                                             Ok(mut resp) => {
                                                 match resp.get(db_location.as_str()) {
-                                                    None => {}
+                                                    None => {
+                                                        match lock.write_db_generic(
+                                                            DB_NAME,
+                                                            db_location.as_str(),
+                                                            entry.clone(),
+                                                        ) {
+                                                            Ok(resp_write) => {
+                                                                match resp_write {
+                                                                    DBPacketResponse::Error(
+                                                                        _,
+                                                                    ) => {
+                                                                        break;
+                                                                    }
+                                                                    _ => {
+                                                                        resp.insert(
+                                                                            db_location
+                                                                                .to_string(),
+                                                                            entry,
+                                                                        );
+                                                                    }
+                                                                }
+                                                            }
+                                                            Err(_) => {
+                                                                break;
+                                                            }
+                                                        }
+                                                    }
                                                     Some(db_entry) => {
                                                         if entry.get_score() > db_entry.get_score()
                                                         {
@@ -142,7 +204,8 @@ fn handle_client(mut stream: TcpStream, client: Arc<Mutex<Client>>) {
                                                     .collect::<Vec<LeaderBoardEntry>>();
                                                 Some(LeaderBoardList::new(list))
                                             }
-                                            Err(_) => {
+                                            Err(err) => {
+                                                eprintln!("{:?}",err);
                                                 let _ = lock.delete_data(
                                                     DB_NAME,
                                                     login_info.hash().to_string().as_str(),
@@ -202,6 +265,7 @@ fn handle_client(mut stream: TcpStream, client: Arc<Mutex<Client>>) {
                                             }
                                         }
                                         Err(_) => {
+
                                             let ser =
                                                 serde_json::to_string(&ServerPacket::ErrorState)
                                                     .unwrap();

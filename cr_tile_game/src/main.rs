@@ -169,6 +169,7 @@ async fn main() {
 
                 root_ui().input_text(hash!(), "Name", &mut state.login_info.user_name);
                 root_ui().input_password(hash!(), "Pass", &mut state.login_info.key);
+                root_ui().input_text(hash!(), "IP", &mut state.ip_address);
 
                 draw_text(
                     "B to go back to main menu, ESC to close game",

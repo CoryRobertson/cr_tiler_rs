@@ -3,7 +3,12 @@ version: '3'
 services:
   service:
     image: "cr_tile_game_service:latest"
+    build:
+      dockerfile: ./Dockerfile
     container_name: "cr_tile_game_service"
+    depends_on:
+      db:
+        condition: service_started
     restart: unless-stopped
     ports:
       - "8114:8114"
@@ -11,10 +16,11 @@ services:
       - "./tile_service_data:/data"
 
   db:
-    build: https://github.com/CoryRobertson/smol_db.git
+    build: https://github.com/CoryRobertson/smol_db.git#main
+    image: smol_db_server
     ports:
       - "8222:8222"
-    container_name: "smol_db_server"
+    container_name: "cr_tile_game_db"
     restart: unless-stopped
     volumes:
       - "./tile_service_data/db:/data"
