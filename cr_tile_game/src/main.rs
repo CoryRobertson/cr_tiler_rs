@@ -192,7 +192,6 @@ async fn main() {
                     if state.client.get_mut().is_some() {
                         match state.submit_score() {
                             Ok(list) => {
-
                                 state.leader_boards = Some(list);
                             }
                             Err(err) => {

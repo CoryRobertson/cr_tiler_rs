@@ -121,9 +121,9 @@ impl TileGameState {
                     Ok(())
                 }
                 Err(err) => {
-                    println!("{}",err);
+                    eprintln!("{}", err);
                     Err(ClientError::FailedToConnect)
-                },
+                }
             },
             Some(_) => Ok(()),
         }
@@ -183,7 +183,7 @@ impl TileGameState {
                                 ServerPacket::LeaderBoard(mut list) => {
                                     list.sort_list();
                                     Ok(list)
-                                },
+                                }
                                 ServerPacket::ErrorState => Err(PacketError),
                             },
                             Err(_) => Err(DeserializationError),
