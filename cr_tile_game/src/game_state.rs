@@ -1,16 +1,17 @@
-use std::io::{Read, Write};
+use crate::game_state::ClientError::{DeserializationError, PacketError, SocketReadError};
 use crate::game_state::GameState::Playing;
 use crate::tile::Tile;
 use crate::{ANTI_TICK_SOUND, SLOT_COUNT};
+use cr_tile_game_common::leader_board_stat::LeaderBoardList;
+use cr_tile_game_common::packet::{ClientPacket, GameDataPacket, LoginInfo, ServerPacket};
 use macroquad::audio::play_sound_once;
 use macroquad::prelude::request_new_screen_size;
 use rand::prelude::SliceRandom;
+use std::cell::Cell;
+use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::sync::atomic::Ordering;
 use std::time::SystemTime;
-use cr_tile_game_common::leader_board_stat::LeaderBoardList;
-use cr_tile_game_common::packet::{ClientPacket, GameDataPacket, LoginInfo, ServerPacket};
-use crate::game_state::ClientError::{DeserializationError, NoClientConnected, PacketError, SocketReadError};
 
 #[derive(PartialEq, Eq, Clone)]
 /// The state representing the player is doing.
@@ -18,6 +19,7 @@ pub enum GameState {
     MainMenu,
     Playing(Difficulty),
     ScoreScreen,
+    Leaderboards,
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -57,9 +59,13 @@ pub struct TileGameState {
     /// The time that the game ended at
     pub game_end_time: SystemTime,
 
-    pub client: Option<TcpStream>,
+    pub client: Cell<Option<TcpStream>>,
 
     pub login_info: LoginInfo,
+
+    pub leader_boards: Option<LeaderBoardList>,
+
+    pub ip_address: String,
 }
 
 impl Default for TileGameState {
@@ -75,18 +81,25 @@ impl Default for TileGameState {
             slot_clicks: 0,
             game_start_time: SystemTime::UNIX_EPOCH,
             game_end_time: SystemTime::now(),
-            client: None,
+            client: Cell::new(None),
             login_info: LoginInfo::default(),
+            leader_boards: None,
+            ip_address: "localhost:8114".to_string(),
         }
     }
 }
 
 #[derive(Debug)]
 pub enum ClientError {
+    /// The client failed to connect
     FailedToConnect,
-    NoClientConnected,
+    // There is no client currently connected
+    // NoClientConnected,
+    /// Socket was unable to read bytes
     SocketReadError,
+    /// Socket read bytes, but failed to deserialize them
     DeserializationError,
+    /// Client received an unexpected packet
     PacketError,
 }
 
@@ -98,61 +111,111 @@ impl TileGameState {
         })
     }
 
-    pub fn submit_score(&mut self) -> Result<LeaderBoardList,ClientError> {
-        let packet = self.to_score_packet().clone();
-        match &mut self.client {
-            None => {
-                Err(NoClientConnected)
-            }
-            Some(client) => {
+    pub fn connect_client(&mut self) -> Result<(), ClientError> {
+        match self.client.get_mut() {
+            None => match TcpStream::connect(self.ip_address.clone()) {
+                Ok(client) => {
+                    self.client.set(Some(client));
+                    Ok(())
+                }
+                Err(_) => Err(ClientError::FailedToConnect),
+            },
+            Some(_) => Ok(()),
+        }
+    }
 
+    pub fn refresh_leaderboards(&mut self) -> Result<(), ClientError> {
+        let packet = ClientPacket::GetLeaderBoardsList;
+        match &mut self.client.get_mut() {
+            None => match self.connect_client() {
+                Ok(_) => self.refresh_leaderboards(),
+                Err(err) => Err(err),
+            },
+            Some(client) => {
                 let ser = serde_json::to_string(&packet).unwrap();
                 let _ = client.write(ser.as_bytes());
                 let mut buf: [u8; 1024] = [0; 1024];
                 match client.read(&mut buf) {
                     Ok(read_length) => {
                         match serde_json::from_slice::<ServerPacket>(&buf[0..read_length]) {
-                            Ok(server_packet) => {
-                               match server_packet {
-                                   ServerPacket::LeaderBoard(list) => {
-                                       Ok(list)
-                                   }
-                                   ServerPacket::ErrorState => {
-                                       Err(PacketError)
-                                   }
-                               }
-                            }
-                            Err(_) => {
-                                Err(DeserializationError)
-                            }
+                            Ok(server_packet) => match server_packet {
+                                ServerPacket::LeaderBoard(mut list) => {
+                                    list.sort_list();
+                                    self.leader_boards = Some(list);
+                                    Ok(())
+                                }
+                                ServerPacket::ErrorState => Err(PacketError),
+                            },
+                            Err(_) => Err(DeserializationError),
                         }
-
                     }
-                    Err(_) => {
-                        Err(SocketReadError)
-                    }
+                    Err(_) => Err(SocketReadError),
                 }
             }
         }
     }
 
+    pub fn submit_score(&mut self) -> Result<LeaderBoardList, ClientError> {
+        let packet = self.to_score_packet().clone();
+        match &mut self.client.get_mut() {
+            None => {
+                match self.connect_client() {
+                    Ok(_) => {}
+                    Err(err) => {
+                        return Err(err);
+                    }
+                }
+                self.submit_score()
+            }
+            Some(client) => {
+                let ser = serde_json::to_string(&packet).unwrap();
+                let _ = client.write(ser.as_bytes());
+                let mut buf: [u8; 1024] = [0; 1024];
+                match client.read(&mut buf) {
+                    Ok(read_length) => {
+                        match serde_json::from_slice::<ServerPacket>(&buf[0..read_length]) {
+                            Ok(server_packet) => match server_packet {
+                                ServerPacket::LeaderBoard(mut list) => {
+                                    list.sort_list();
+                                    Ok(list)
+                                },
+                                ServerPacket::ErrorState => Err(PacketError),
+                            },
+                            Err(_) => Err(DeserializationError),
+                        }
+                    }
+                    Err(_) => Err(SocketReadError),
+                }
+            }
+        }
+    }
+
+    pub fn goto_main_menu(&mut self) {
+        self.state = GameState::MainMenu;
+    }
+
     pub fn start_game(&mut self, difficulty: Difficulty, will_connect: bool) {
-        let login = self.login_info.clone();
-        *self = TileGameState::default();
+        *self = TileGameState {
+            client: Cell::from(self.client.replace(None)),
+            login_info: self.login_info.clone(),
+            state: Playing(difficulty.clone()),
+            game_start_time: SystemTime::now(),
+            ..Default::default()
+        };
+
         if will_connect {
-            self.client = Some(TcpStream::connect("localhost:8114").unwrap());
-            self.login_info = login;
+            let _ = self.connect_client();
         }
         if difficulty == Difficulty::Hard {
             self.tile_hit_count = 30;
             self.lives = 5;
         }
-        self.state = Playing(difficulty);
-        self.game_start_time = SystemTime::now();
+
         request_new_screen_size(
             (SLOT_COUNT.load(Ordering::Relaxed) as f32 * 100.0) + 100.0,
             600.0,
         );
+
         for _ in 0..(SLOT_COUNT.load(Ordering::Relaxed) as usize - self.slot_press_time.len()) {
             self.slot_press_time.push(SystemTime::UNIX_EPOCH);
         }

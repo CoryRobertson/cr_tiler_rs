@@ -6,7 +6,6 @@ use macroquad::audio::{load_sound_from_bytes, play_sound_once, set_sound_volume,
 use macroquad::hash;
 use macroquad::prelude::*;
 use macroquad::ui::root_ui;
-use std::io::{Read, Write};
 use std::iter::Iterator;
 use std::process::exit;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -36,6 +35,8 @@ pub(crate) static TICK_SOUND: OnceLock<Sound> = OnceLock::new();
 pub(crate) static ANTI_TICK_SOUND: OnceLock<Sound> = OnceLock::new();
 pub(crate) static FIRE_ICON: OnceLock<Texture2D> = OnceLock::new();
 pub(crate) static HEART_ICON: OnceLock<Texture2D> = OnceLock::new();
+pub(crate) static EARTH_ICON: OnceLock<Texture2D> = OnceLock::new();
+pub(crate) static NOTEARTH_ICON: OnceLock<Texture2D> = OnceLock::new();
 
 /// fn to check if the given index would be a out of bounds when referencing a color for a slot.
 /// -> See slot press time update block
@@ -60,6 +61,14 @@ async fn main() {
     let mut will_connect = false;
     // load textures and sounds
     {
+        let not_earth_icon =
+            Texture2D::from_file_with_format(include_bytes!("../assets/NOEarth.png"), None);
+        NOTEARTH_ICON.set(not_earth_icon).unwrap();
+
+        let earth_icon =
+            Texture2D::from_file_with_format(include_bytes!("../assets/Earth_smol.png"), None);
+        EARTH_ICON.set(earth_icon).unwrap();
+
         let heart_icon =
             Texture2D::from_file_with_format(include_bytes!("../assets/heart.png"), None);
         HEART_ICON.set(heart_icon).unwrap();
@@ -116,6 +125,15 @@ async fn main() {
                     ) {
                         state.start_game(Difficulty::Hard, will_connect);
                     }
+                    if root_ui().button(
+                        Vec2::from_slice(&[
+                            (screen_width() / 2.0) - 25.0,
+                            (screen_height() / 2.0) + 50.0,
+                        ]),
+                        "Leaderboards",
+                    ) {
+                        state.state = GameState::Leaderboards;
+                    }
                 }
 
                 if root_ui().button(None, "Quit") {
@@ -170,12 +188,15 @@ async fn main() {
                 if state.lives < 0 {
                     state.state = GameState::ScoreScreen;
 
-                    match state.submit_score() {
-                        Ok(list) => {
-                            dbg!(list);
-                        }
-                        Err(err) => {
-                            println!("{:?}",err);
+                    if state.client.get_mut().is_some() {
+                        match state.submit_score() {
+                            Ok(list) => {
+
+                                state.leader_boards = Some(list);
+                            }
+                            Err(err) => {
+                                println!("{:?}", err);
+                            }
                         }
                     }
                     state.game_end_time = SystemTime::now();
@@ -189,6 +210,25 @@ async fn main() {
                         100.0 + (HEART_ICON.get().unwrap().height() * a as f32),
                         WHITE,
                     );
+                }
+
+                match state.client.get_mut() {
+                    None => {
+                        draw_texture(
+                            *NOTEARTH_ICON.get().unwrap(),
+                            screen_width() - 32.0,
+                            0.0,
+                            WHITE,
+                        );
+                    }
+                    Some(_) => {
+                        draw_texture(
+                            *EARTH_ICON.get().unwrap(),
+                            screen_width() - 32.0,
+                            0.0,
+                            WHITE,
+                        );
+                    }
                 }
 
                 draw_text(
@@ -379,12 +419,44 @@ async fn main() {
                     20.0,
                     BLACK,
                 );
+                if root_ui().button(
+                    Vec2::from_slice(&[screen_width() / 2.0 - 61.0, screen_height() / 2.0]),
+                    "View Leaderboards",
+                ) {
+                    state.state = GameState::Leaderboards;
+                }
+                if root_ui().button(
+                    Vec2::from_slice(&[screen_width() / 2.0 - 61.0, screen_height() / 2.0 + 25.0]),
+                    "Back to main menu",
+                ) {
+                    state.goto_main_menu();
+                }
+            }
+            GameState::Leaderboards => {
+                clear_background(GRAY);
+
+                if root_ui().button(Vec2::from_slice(&[50.0, 50.0]), "Refresh") {
+                    let _ = state.refresh_leaderboards();
+                }
+
+                match &state.leader_boards {
+                    None => {}
+                    Some(list) => {
+                        for (index, entry) in list.get_list().iter().enumerate() {
+                            let pos = &[
+                                screen_width() / 2.0 - 50.0,
+                                (index as f32 * 25.0) + screen_height() / 4.0,
+                            ];
+                            draw_text(&format!("{}", entry), pos[0], pos[1], 20.0, BLACK);
+                        }
+                    }
+                }
             }
         }
 
         // allow the game to be exited to the main menu
         if is_key_pressed(KeyCode::B) {
-            state = TileGameState::default();
+            state.goto_main_menu();
             request_new_screen_size(400.0, 600.0);
         }
 

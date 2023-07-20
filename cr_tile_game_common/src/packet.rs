@@ -1,8 +1,8 @@
-use std::collections::hash_map::DefaultHasher;
+use crate::leader_board_stat::LeaderBoardList;
 use serde::{Deserialize, Serialize};
+use std::collections::hash_map::DefaultHasher;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
-use crate::leader_board_stat::LeaderBoardList;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientPacket {
@@ -16,7 +16,7 @@ pub enum ServerPacket {
     ErrorState,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct GameDataPacket {
     pub score: i32,
     pub login_info: LoginInfo,
@@ -42,15 +42,6 @@ impl Default for LoginInfo {
         Self {
             user_name: "".to_string(),
             key: "".to_string(),
-        }
-    }
-}
-
-impl Default for GameDataPacket {
-    fn default() -> Self {
-        Self {
-            score: 0,
-            login_info: LoginInfo::default(),
         }
     }
 }
