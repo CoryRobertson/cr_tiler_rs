@@ -1,5 +1,5 @@
 [workspace]
-members = ["cr_tile_game_service","cr_tile_game"]
+members = ["cr_tile_game_service","cr_tile_game", "cr_tile_game_common"]
 
 [profile.release]
 lto = true

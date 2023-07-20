@@ -1,5 +1,20 @@
+use std::collections::hash_map::DefaultHasher;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
+use crate::leader_board_stat::LeaderBoardList;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ClientPacket {
+    SubmitDataPacket(GameDataPacket),
+    GetLeaderBoardsList,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ServerPacket {
+    LeaderBoard(LeaderBoardList),
+    ErrorState,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameDataPacket {
@@ -11,6 +26,15 @@ pub struct GameDataPacket {
 pub struct LoginInfo {
     pub user_name: String,
     pub key: String,
+}
+
+impl LoginInfo {
+    pub fn hash(&self) -> u64 {
+        let mut hasher = DefaultHasher::new(); // FIXME: change this hasher to something else, this will not work between releases
+        self.user_name.hash(&mut hasher);
+        self.key.hash(&mut hasher);
+        hasher.finish()
+    }
 }
 
 impl Default for LoginInfo {

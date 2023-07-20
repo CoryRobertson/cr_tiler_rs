@@ -169,15 +169,13 @@ async fn main() {
                 // stop the game when the lives are less than 0
                 if state.lives < 0 {
                     state.state = GameState::ScoreScreen;
-                    let packet = state.to_packet();
-                    match &mut state.client {
-                        None => {}
-                        Some(client) => {
-                            let ser = serde_json::to_string(&packet).unwrap();
-                            dbg!(&ser);
-                            let _ = client.write(ser.as_bytes());
-                            let mut buf: [u8; 1024] = [0; 1024];
-                            let _ = client.read(&mut buf);
+
+                    match state.submit_score() {
+                        Ok(list) => {
+                            dbg!(list);
+                        }
+                        Err(err) => {
+                            println!("{:?}",err);
                         }
                     }
                     state.game_end_time = SystemTime::now();

@@ -9,8 +9,8 @@ edition = "2021"
 macroquad = "0.3.25"
 serde = {version = "1.0.164", features = ["derive"]}
 rand = "0.8.5"
-cr_tile_game_service = { path = "../cr_tile_game_service" }
 serde_json = "1.0.97"
+cr_tile_game_common = { path = "../cr_tile_game_common" }
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1.12" # for adding program icon to compiled binary

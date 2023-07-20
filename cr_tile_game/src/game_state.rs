@@ -1,13 +1,16 @@
+use std::io::{Read, Write};
 use crate::game_state::GameState::Playing;
 use crate::tile::Tile;
 use crate::{ANTI_TICK_SOUND, SLOT_COUNT};
-use cr_tile_game_service::packet::{GameDataPacket, LoginInfo};
 use macroquad::audio::play_sound_once;
 use macroquad::prelude::request_new_screen_size;
 use rand::prelude::SliceRandom;
 use std::net::TcpStream;
 use std::sync::atomic::Ordering;
 use std::time::SystemTime;
+use cr_tile_game_common::leader_board_stat::LeaderBoardList;
+use cr_tile_game_common::packet::{ClientPacket, GameDataPacket, LoginInfo, ServerPacket};
+use crate::game_state::ClientError::{DeserializationError, NoClientConnected, PacketError, SocketReadError};
 
 #[derive(PartialEq, Eq, Clone)]
 /// The state representing the player is doing.
@@ -78,11 +81,58 @@ impl Default for TileGameState {
     }
 }
 
+#[derive(Debug)]
+pub enum ClientError {
+    FailedToConnect,
+    NoClientConnected,
+    SocketReadError,
+    DeserializationError,
+    PacketError,
+}
+
 impl TileGameState {
-    pub fn to_packet(&self) -> GameDataPacket {
-        GameDataPacket {
+    fn to_score_packet(&self) -> ClientPacket {
+        ClientPacket::SubmitDataPacket(GameDataPacket {
             score: self.get_score(),
             login_info: self.login_info.clone(),
+        })
+    }
+
+    pub fn submit_score(&mut self) -> Result<LeaderBoardList,ClientError> {
+        let packet = self.to_score_packet().clone();
+        match &mut self.client {
+            None => {
+                Err(NoClientConnected)
+            }
+            Some(client) => {
+
+                let ser = serde_json::to_string(&packet).unwrap();
+                let _ = client.write(ser.as_bytes());
+                let mut buf: [u8; 1024] = [0; 1024];
+                match client.read(&mut buf) {
+                    Ok(read_length) => {
+                        match serde_json::from_slice::<ServerPacket>(&buf[0..read_length]) {
+                            Ok(server_packet) => {
+                               match server_packet {
+                                   ServerPacket::LeaderBoard(list) => {
+                                       Ok(list)
+                                   }
+                                   ServerPacket::ErrorState => {
+                                       Err(PacketError)
+                                   }
+                               }
+                            }
+                            Err(_) => {
+                                Err(DeserializationError)
+                            }
+                        }
+
+                    }
+                    Err(_) => {
+                        Err(SocketReadError)
+                    }
+                }
+            }
         }
     }
 
