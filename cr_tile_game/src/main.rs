@@ -31,12 +31,14 @@ const HIT_LENGTH: f32 = 0.125;
 /// The keybindings relating to each slot.
 const KEY_BINDS: [KeyCode; 5] = [KeyCode::Q, KeyCode::W, KeyCode::E, KeyCode::R, KeyCode::T];
 
+const GIT_DESCRIBE: &str = env!("VERGEN_GIT_DESCRIBE");
+
 pub(crate) static TICK_SOUND: OnceLock<Sound> = OnceLock::new();
 pub(crate) static ANTI_TICK_SOUND: OnceLock<Sound> = OnceLock::new();
 pub(crate) static FIRE_ICON: OnceLock<Texture2D> = OnceLock::new();
 pub(crate) static HEART_ICON: OnceLock<Texture2D> = OnceLock::new();
 pub(crate) static EARTH_ICON: OnceLock<Texture2D> = OnceLock::new();
-pub(crate) static NOTEARTH_ICON: OnceLock<Texture2D> = OnceLock::new();
+pub(crate) static NOT_EARTH_ICON: OnceLock<Texture2D> = OnceLock::new();
 
 /// fn to check if the given index would be a out of bounds when referencing a color for a slot.
 /// -> See slot press time update block
@@ -54,7 +56,16 @@ fn get_hit_bar_width() -> f32 {
     TILE_WIDTH * SLOT_COUNT.load(Ordering::Relaxed) as f32
 }
 
-#[macroquad::main("cr_tile_game")]
+fn window_conf() -> Conf {
+    Conf {
+        window_title: GIT_DESCRIBE.to_string(),
+        ..Default::default()
+    }
+}
+
+// TODO: make program store username and password in a config file of some kind :)
+
+#[macroquad::main(window_conf)]
 async fn main() {
     let mut state = TileGameState::default();
     let mut tick_vol = 1.0;
@@ -63,7 +74,7 @@ async fn main() {
     {
         let not_earth_icon =
             Texture2D::from_file_with_format(include_bytes!("../assets/NOEarth.png"), None);
-        NOTEARTH_ICON.set(not_earth_icon).unwrap();
+        NOT_EARTH_ICON.set(not_earth_icon).unwrap();
 
         let earth_icon =
             Texture2D::from_file_with_format(include_bytes!("../assets/Earth_smol.png"), None);
@@ -215,7 +226,7 @@ async fn main() {
                 match state.client.get_mut() {
                     None => {
                         draw_texture(
-                            *NOTEARTH_ICON.get().unwrap(),
+                            *NOT_EARTH_ICON.get().unwrap(),
                             screen_width() - 32.0,
                             0.0,
                             WHITE,
