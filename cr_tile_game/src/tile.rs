@@ -6,9 +6,9 @@ use std::sync::atomic::Ordering;
 /// The width of the tile for spacing purposes
 pub const TILE_WIDTH: f32 = 100.0;
 /// The height of the tile, for rendering and spacing, as well as duration that the tile can be hit
-const TILE_HEIGHT: f32 = 100.0;
+pub const TILE_HEIGHT: f32 = 100.0;
 /// The gap between each tile slot
-const TILE_MARGIN: f32 = 10.0;
+pub const TILE_MARGIN: f32 = 10.0;
 
 #[derive(Debug, Clone)]
 /// A struct representing the tiles within the game.

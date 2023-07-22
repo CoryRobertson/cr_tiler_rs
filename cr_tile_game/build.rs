@@ -3,7 +3,7 @@ use vergen::EmitBuilder;
 #[cfg(target_os = "windows")]
 use winres::WindowsResource;
 
-fn main() -> Result<(),Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     #[cfg(target_os = "windows")] // conditionally set icon of program on windows
     {
         WindowsResource::new()
@@ -11,9 +11,7 @@ fn main() -> Result<(),Box<dyn Error>> {
             .compile()?;
     }
 
-    EmitBuilder::builder()
-        .all_git()
-        .emit()?;
+    EmitBuilder::builder().all_git().emit()?;
 
     Ok(())
 }

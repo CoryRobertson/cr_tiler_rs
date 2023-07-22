@@ -1,7 +1,9 @@
 #![windows_subsystem = "windows"]
 
+use crate::game_settings::GameSettings;
 use crate::game_state::{Difficulty, GameState, TileGameState};
 use crate::tile::TILE_WIDTH;
+use cr_tile_game_common::packet::LoginInfo;
 use macroquad::audio::{load_sound_from_bytes, play_sound_once, set_sound_volume, Sound};
 use macroquad::hash;
 use macroquad::prelude::*;
@@ -13,6 +15,8 @@ use std::sync::OnceLock;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
 
+mod background_elements;
+mod game_settings;
 mod game_state;
 mod tile;
 
@@ -67,9 +71,20 @@ fn window_conf() -> Conf {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    let mut state = TileGameState::default();
-    let mut tick_vol = 1.0;
+    let mut game_settings = GameSettings::load();
+
+    let mut state = TileGameState {
+        ip_address: game_settings.ip_address.clone(),
+        login_info: LoginInfo {
+            user_name: game_settings.username.clone(),
+            key: game_settings.key.clone(),
+        },
+        ..Default::default()
+    };
+    let mut tick_vol = game_settings.volume;
     let mut will_connect = false;
+    SLOT_COUNT.store(game_settings.slot_count, Ordering::Relaxed);
+
     // load textures and sounds
     {
         let not_earth_icon =
@@ -104,19 +119,17 @@ async fn main() {
     }
 
     // set screen size to a size that will show every tile
-    request_new_screen_size(
-        (SLOT_COUNT.load(Ordering::Relaxed) as f32 * 100.0) + 100.0,
-        600.0,
-    );
+    request_new_screen_size(400.0, 600.0);
 
     loop {
         // quit game key bind
         if is_key_pressed(KeyCode::Escape) {
+            game_settings.save();
             exit(0);
         }
 
         match state.state.clone() {
-            GameState::MainMenu => {
+            GameState::MainMenu(_) => {
                 clear_background(DARKGRAY);
 
                 // start game buttons
@@ -154,12 +167,14 @@ async fn main() {
                     play_sound_once(*TICK_SOUND.get().unwrap());
                 }
                 root_ui().slider(hash!(), "Volume", 0.0..1.0, &mut tick_vol); // volume slider
+                game_settings.volume = tick_vol;
                 let slot_count_load = SLOT_COUNT.load(Ordering::Relaxed);
 
                 // block for changing slot count
                 {
                     if root_ui().button(None, "+ Slot") && slot_count_load <= 4 {
                         SLOT_COUNT.fetch_add(1, Ordering::Relaxed);
+                        game_settings.slot_count = SLOT_COUNT.load(Ordering::Relaxed);
                     }
                     draw_text(
                         &format!("{}", SLOT_COUNT.load(Ordering::Relaxed)),
@@ -170,17 +185,33 @@ async fn main() {
                     );
                     if root_ui().button(None, "- Slot") && slot_count_load >= 2 {
                         SLOT_COUNT.fetch_sub(1, Ordering::Relaxed);
+                        game_settings.slot_count = SLOT_COUNT.load(Ordering::Relaxed);
                     }
                 }
 
-                set_sound_volume(*TICK_SOUND.get().unwrap(), tick_vol);
-                set_sound_volume(*ANTI_TICK_SOUND.get().unwrap(), tick_vol);
+                // block for various ui elements
+                {
+                    if root_ui().button(None, "Reset game state") {
+                        state = TileGameState::default();
+                    }
 
-                root_ui().checkbox(hash!(), "will connect", &mut will_connect);
+                    // volume sliders
+                    set_sound_volume(*TICK_SOUND.get().unwrap(), tick_vol);
+                    set_sound_volume(*ANTI_TICK_SOUND.get().unwrap(), tick_vol);
 
-                root_ui().input_text(hash!(), "Name", &mut state.login_info.user_name);
-                root_ui().input_password(hash!(), "Pass", &mut state.login_info.key);
-                root_ui().input_text(hash!(), "IP", &mut state.ip_address);
+                    // connection to internet checkbox
+                    root_ui().checkbox(hash!(), "will connect", &mut will_connect);
+
+                    // login info
+                    root_ui().input_text(hash!(), "Name", &mut state.login_info.user_name);
+                    game_settings.username = state.login_info.user_name.clone();
+                    root_ui().input_password(hash!(), "Pass", &mut state.login_info.key);
+                    game_settings.key = state.login_info.key.clone();
+
+                    // ip to connect to
+                    root_ui().input_text(hash!(), "IP", &mut state.ip_address);
+                    game_settings.ip_address = state.ip_address.clone();
+                }
 
                 draw_text(
                     "B to go back to main menu, ESC to close game",
@@ -189,6 +220,22 @@ async fn main() {
                     20.0,
                     BLACK,
                 );
+
+                draw_text(
+                    "Passwords are not stored securely, be careful.",
+                    10.0,
+                    575.0,
+                    16.0,
+                    BLACK,
+                );
+
+                // background tiles
+                {
+                    if let GameState::MainMenu(bg_tile_list) = &mut state.state {
+                        bg_tile_list.step();
+                        bg_tile_list.draw_all();
+                    }
+                }
             }
             GameState::Playing(difficulty) => {
                 clear_background(GRAY);

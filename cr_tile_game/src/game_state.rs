@@ -1,3 +1,4 @@
+use crate::background_elements::BackgroundTileList;
 use crate::game_state::ClientError::{DeserializationError, PacketError, SocketReadError};
 use crate::game_state::GameState::Playing;
 use crate::tile::Tile;
@@ -16,7 +17,7 @@ use std::time::SystemTime;
 #[derive(PartialEq, Eq, Clone)]
 /// The state representing the player is doing.
 pub enum GameState {
-    MainMenu,
+    MainMenu(BackgroundTileList),
     Playing(Difficulty),
     ScoreScreen,
     Leaderboards,
@@ -39,7 +40,7 @@ pub struct TileGameState {
     pub slot_press_time: Vec<SystemTime>,
 
     /// The time since the last tile was spawned
-    time_since_tile: SystemTime,
+    pub time_since_tile: SystemTime,
 
     /// The number of seconds delayed between spawning tiles
     pub tile_spawn_time: f32,
@@ -71,7 +72,7 @@ pub struct TileGameState {
 impl Default for TileGameState {
     fn default() -> Self {
         Self {
-            state: GameState::MainMenu,
+            state: GameState::MainMenu(BackgroundTileList::new()),
             tiles: vec![],
             slot_press_time: TileGameState::new_slot_press_time(),
             time_since_tile: SystemTime::now(),
@@ -196,7 +197,7 @@ impl TileGameState {
     }
 
     pub fn goto_main_menu(&mut self) {
-        self.state = GameState::MainMenu;
+        self.state = GameState::MainMenu(BackgroundTileList::new());
     }
 
     pub fn start_game(&mut self, difficulty: Difficulty, will_connect: bool) {
