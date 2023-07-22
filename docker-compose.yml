@@ -4,7 +4,8 @@ services:
   service:
     image: "cr_tile_game_service:latest"
     build:
-      dockerfile: ./Dockerfile
+      context: "./"
+      dockerfile: "./Dockerfile"
     container_name: "cr_tile_game_service"
     depends_on:
       db:
