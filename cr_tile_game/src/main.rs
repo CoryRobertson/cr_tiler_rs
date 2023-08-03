@@ -200,7 +200,7 @@ async fn main() {
                     set_sound_volume(*ANTI_TICK_SOUND.get().unwrap(), tick_vol);
 
                     // connection to internet checkbox
-                    root_ui().checkbox(hash!(), "will connect", &mut will_connect);
+                    root_ui().checkbox(hash!(), "Play Online ?", &mut will_connect);
 
                     // login info
                     root_ui().input_text(hash!(), "Name", &mut state.login_info.user_name);

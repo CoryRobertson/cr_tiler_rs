@@ -14,3 +14,5 @@ Cargo.lock
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
 
+/tile_service_data/db/cr_tile_game_db
+/tile_service_data/db/db_list.ser
