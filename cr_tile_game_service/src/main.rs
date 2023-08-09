@@ -1,29 +1,28 @@
 use cr_tile_game_common::leader_board_stat::{LeaderBoardEntry, LeaderBoardList};
 use cr_tile_game_common::packet::{ClientPacket, LoginInfo, ServerPacket};
 use smol_db_client::db_settings::DBSettings;
-use smol_db_client::{Client, DBPacketResponse, DBPacketResponseError};
+use smol_db_client::{DBSuccessResponse, SmolDbClient};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::{sleep, JoinHandle};
 use std::time::Duration;
+use smol_db_client::client_error::ClientError;
+use smol_db_client::DBPacketResponseError::DBAlreadyExists;
 
 const DB_NAME: &str = "cr_tile_game_db";
 const DB_KEY: &str = "cr_tile_game_service";
 
-fn setup_client(client: &mut Client) {
+fn setup_client(client: &mut SmolDbClient) {
     // set access key to client
     match client.set_access_key(DB_KEY.to_string()) {
         Ok(response) => match response {
-            DBPacketResponse::SuccessNoData => {
+            DBSuccessResponse::SuccessNoData => {
                 println!("Key set successfully.");
             }
-            DBPacketResponse::SuccessReply(reply) => {
+            DBSuccessResponse::SuccessReply(reply) => {
                 panic!("This should not happen: {:?}", reply);
-            }
-            DBPacketResponse::Error(err) => {
-                panic!("Error setting access key: {:?}", err);
             }
         },
         Err(err) => {
@@ -45,14 +44,12 @@ fn setup_client(client: &mut Client) {
                             vec![DB_KEY.to_string()],
                             vec![],
                         ),
-                    )
-                    .unwrap()
-                {
-                    DBPacketResponse::Error(err) => {
-                        assert_eq!(err, DBPacketResponseError::DBAlreadyExists);
-                    }
-                    _ => {
+                    ) {
+                    Ok(_) => {
                         println!("DB Created...");
+                    }
+                    Err(err) => {
+                        assert_eq!(err, ClientError::DBResponseError(DBAlreadyExists));
                     }
                 }
             }
@@ -72,13 +69,13 @@ fn main() {
             if count >= 10 {
                 panic!("Unable to connect to db after 10 retries");
             }
-            let client_result = Client::new("localhost:8222");
+            let client_result = SmolDbClient::new("localhost:8222");
             match client_result {
                 Ok(client) => {
                     break client;
                 }
                 Err(_) => {
-                    let client_result_docker_attempt = Client::new("db:8222");
+                    let client_result_docker_attempt = SmolDbClient::new("db:8222");
                     if let Ok(client) = client_result_docker_attempt {
                         break client;
                     }
@@ -114,7 +111,7 @@ fn main() {
     }
 }
 
-fn handle_client(mut stream: TcpStream, client: Arc<Mutex<Client>>) {
+fn handle_client(mut stream: TcpStream, client: Arc<Mutex<SmolDbClient>>) {
     let mut buf: [u8; 1024] = [0; 1024];
     let ip = stream.peer_addr().expect("Unable to get peer address").ip();
 
@@ -141,8 +138,6 @@ fn handle_client(mut stream: TcpStream, client: Arc<Mutex<Client>>) {
                                         discriminator,
                                     );
 
-                                    dbg!(packet);
-
                                     let content_opt = {
                                         match lock
                                             .list_db_contents_generic::<LeaderBoardEntry>(DB_NAME)
@@ -156,9 +151,6 @@ fn handle_client(mut stream: TcpStream, client: Arc<Mutex<Client>>) {
                                                             entry.clone(),
                                                         ) {
                                                             Ok(resp_write) => match resp_write {
-                                                                DBPacketResponse::Error(_) => {
-                                                                    break;
-                                                                }
                                                                 _ => {
                                                                     resp.insert(
                                                                         db_location.to_string(),
@@ -181,11 +173,6 @@ fn handle_client(mut stream: TcpStream, client: Arc<Mutex<Client>>) {
                                                             ) {
                                                                 Ok(resp_write) => {
                                                                     match resp_write {
-                                                                        DBPacketResponse::Error(
-                                                                            _,
-                                                                        ) => {
-                                                                            break;
-                                                                        }
                                                                         _ => {
                                                                             resp.insert(
                                                                                 db_location
