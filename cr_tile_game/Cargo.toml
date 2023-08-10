@@ -7,13 +7,13 @@ build = "build.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-macroquad = "0.3.25"
-serde = {version = "1.0.164", features = ["derive"]}
+macroquad = { version = "0.4.2", features = ["audio"] }
+serde = {version = "1.0.164", features = ["derive"] }
 rand = "0.8.5"
 serde_json = "1.0.97"
 cr_tile_game_common = { path = "../cr_tile_game_common" }
 cr_program_settings = { git = "https://github.com/CoryRobertson/cr_program_settings.git" }
-rayon = "1.7.0"
+#rayon = "1.7.0"
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1.12" # for adding program icon to compiled binary

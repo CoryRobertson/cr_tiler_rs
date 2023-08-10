@@ -338,7 +338,7 @@ impl TileGameState {
                 if !distance_state {
                     // if the tile is, then play a sound, reduce the score, and remove a life
                     self.lives -= 1;
-                    play_sound_once(*ANTI_TICK_SOUND.get().unwrap());
+                    play_sound_once(ANTI_TICK_SOUND.get().unwrap());
                 }
 
                 distance_state

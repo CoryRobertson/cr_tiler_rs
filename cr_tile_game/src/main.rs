@@ -67,8 +67,6 @@ fn window_conf() -> Conf {
     }
 }
 
-// TODO: make program store username and password in a config file of some kind :)
-
 #[macroquad::main(window_conf)]
 async fn main() {
     let mut game_settings = GameSettings::load();
@@ -164,7 +162,7 @@ async fn main() {
                     exit(1);
                 }
                 if root_ui().button(None, "Test Sound") {
-                    play_sound_once(*TICK_SOUND.get().unwrap());
+                    play_sound_once(TICK_SOUND.get().unwrap());
                 }
                 root_ui().slider(hash!(), "Volume", 0.0..1.0, &mut tick_vol); // volume slider
                 game_settings.volume = tick_vol;
@@ -196,8 +194,8 @@ async fn main() {
                     }
 
                     // volume sliders
-                    set_sound_volume(*TICK_SOUND.get().unwrap(), tick_vol);
-                    set_sound_volume(*ANTI_TICK_SOUND.get().unwrap(), tick_vol);
+                    set_sound_volume(TICK_SOUND.get().unwrap(), tick_vol);
+                    set_sound_volume(ANTI_TICK_SOUND.get().unwrap(), tick_vol);
 
                     // connection to internet checkbox
                     root_ui().checkbox(hash!(), "Play Online ?", &mut will_connect);
@@ -240,8 +238,8 @@ async fn main() {
             GameState::Playing(difficulty) => {
                 clear_background(GRAY);
                 let bar_width = get_hit_bar_width();
-                set_sound_volume(*TICK_SOUND.get().unwrap(), tick_vol);
-                set_sound_volume(*ANTI_TICK_SOUND.get().unwrap(), tick_vol);
+                set_sound_volume(TICK_SOUND.get().unwrap(), tick_vol);
+                set_sound_volume(ANTI_TICK_SOUND.get().unwrap(), tick_vol);
 
                 // stop the game when the lives are less than 0
                 if state.lives < 0 {
@@ -263,7 +261,7 @@ async fn main() {
                 // draw each heart for every life the player has
                 for a in 0..state.lives {
                     draw_texture(
-                        *HEART_ICON.get().unwrap(),
+                        HEART_ICON.get().unwrap(),
                         SLOT_COUNT.load(Ordering::Relaxed) as f32 * 100.0,
                         100.0 + (HEART_ICON.get().unwrap().height() * a as f32),
                         WHITE,
@@ -273,19 +271,14 @@ async fn main() {
                 match state.client.get_mut() {
                     None => {
                         draw_texture(
-                            *NOT_EARTH_ICON.get().unwrap(),
+                            NOT_EARTH_ICON.get().unwrap(),
                             screen_width() - 32.0,
                             0.0,
                             WHITE,
                         );
                     }
                     Some(_) => {
-                        draw_texture(
-                            *EARTH_ICON.get().unwrap(),
-                            screen_width() - 32.0,
-                            0.0,
-                            WHITE,
-                        );
+                        draw_texture(EARTH_ICON.get().unwrap(), screen_width() - 32.0, 0.0, WHITE);
                     }
                 }
 
@@ -323,7 +316,7 @@ async fn main() {
                 // draw fire when the difficulty is on hard mode
                 if difficulty == Difficulty::Hard {
                     draw_texture(
-                        *FIRE_ICON.get().unwrap(),
+                        FIRE_ICON.get().unwrap(),
                         SLOT_COUNT.load(Ordering::Relaxed) as f32 * 100.0,
                         screen_height() - 150.0,
                         WHITE,
@@ -429,7 +422,7 @@ async fn main() {
                                     if hit_state {
                                         // if the tile was hit, increment the hit count
                                         state.tile_hit_count += 2;
-                                        play_sound_once(*TICK_SOUND.get().unwrap())
+                                        play_sound_once(TICK_SOUND.get().unwrap())
                                     }
 
                                     !hit_state // do not keep hit tiles, thus filtering them out when they are hit

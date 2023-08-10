@@ -1,6 +1,8 @@
 use cr_tile_game_common::leader_board_stat::{LeaderBoardEntry, LeaderBoardList};
 use cr_tile_game_common::packet::{ClientPacket, LoginInfo, ServerPacket};
+use smol_db_client::client_error::ClientError;
 use smol_db_client::db_settings::DBSettings;
+use smol_db_client::DBPacketResponseError::DBAlreadyExists;
 use smol_db_client::{DBSuccessResponse, SmolDbClient};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -8,8 +10,6 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::{sleep, JoinHandle};
 use std::time::Duration;
-use smol_db_client::client_error::ClientError;
-use smol_db_client::DBPacketResponseError::DBAlreadyExists;
 
 const DB_NAME: &str = "cr_tile_game_db";
 const DB_KEY: &str = "cr_tile_game_service";
@@ -34,17 +34,16 @@ fn setup_client(client: &mut SmolDbClient) {
     match client.list_db() {
         Ok(list) => {
             if !list.iter().any(|db_info| db_info.get_db_name() == DB_NAME) {
-                match client
-                    .create_db(
-                        DB_NAME,
-                        DBSettings::new(
-                            Duration::from_secs(30),
-                            (false, false, false),
-                            (false, false, false),
-                            vec![DB_KEY.to_string()],
-                            vec![],
-                        ),
-                    ) {
+                match client.create_db(
+                    DB_NAME,
+                    DBSettings::new(
+                        Duration::from_secs(30),
+                        (false, false, false),
+                        (false, false, false),
+                        vec![DB_KEY.to_string()],
+                        vec![],
+                    ),
+                ) {
                     Ok(_) => {
                         println!("DB Created...");
                     }

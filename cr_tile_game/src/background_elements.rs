@@ -5,7 +5,6 @@ use crate::tile::{TILE_HEIGHT, TILE_WIDTH};
 use macroquad::prelude::{draw_rectangle, draw_rectangle_lines, Color, BLACK};
 use macroquad::rand::gen_range;
 use macroquad::window::{screen_height, screen_width};
-use rayon::prelude::*;
 
 /// The number of tiles that get drawn
 const BACKGROUND_TILE_COUNT: i32 = 20;
@@ -80,7 +79,7 @@ impl BackgroundTileList {
 
     /// Steps the physics of all of the tiles on screen.
     pub fn step(&mut self) {
-        self.list.par_iter_mut().for_each(|tile| {
+        self.list.iter_mut().for_each(|tile| {
             tile.step();
             if tile.x < (0.0 - TILE_WIDTH) || tile.x > screen_width() {
                 tile.reset();
