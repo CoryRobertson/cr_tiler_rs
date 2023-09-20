@@ -1,6 +1,6 @@
 [workspace]
 members = ["cr_tile_game_service","cr_tile_game", "cr_tile_game_common"]
-
+resolver = "2"
 [profile.release]
 lto = true
 opt-level = 3
