@@ -31,7 +31,7 @@ static SLOT_COUNT: AtomicU8 = AtomicU8::new(3);
 /// The colors representing each tile hit bar
 const COLORS: [Color; 5] = [ORANGE, BLUE, PURPLE, PINK, YELLOW];
 /// The duration in seconds representing how long a key press is held
-const HIT_LENGTH: f32 = 0.125;
+const HIT_LENGTH: f32 = 0.016;
 /// The keybindings relating to each slot.
 const KEY_BINDS: [KeyCode; 5] = [KeyCode::Q, KeyCode::W, KeyCode::E, KeyCode::R, KeyCode::T];
 
@@ -398,7 +398,7 @@ async fn main() {
                                 match difficulty {
                                     Difficulty::Normal => HIT_LENGTH,
                                     Difficulty::Hard => HIT_LENGTH / 10.0,
-                                }
+                                }.max(0.016)
                             }
                         {
                             // draw each slot bar
@@ -411,6 +411,7 @@ async fn main() {
                                 color,
                             );
 
+                            let mut tile_hit_so_far = false;
                             // remove tiles which are hit and hit on the slot that is hitting them.
                             state.tiles = state
                                 .tiles
@@ -419,7 +420,8 @@ async fn main() {
                                 .filter(|tile| {
                                     let hit_state = tile.is_hit(index as u8); // state representing if the given tile is hit
 
-                                    if hit_state {
+                                    if hit_state && !tile_hit_so_far {
+                                        tile_hit_so_far = true;
                                         // if the tile was hit, increment the hit count
                                         state.tile_hit_count += 2;
                                         play_sound_once(TICK_SOUND.get().unwrap())

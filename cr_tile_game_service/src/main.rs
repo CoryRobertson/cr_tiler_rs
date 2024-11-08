@@ -1,9 +1,9 @@
+use smol_db_client::DBPacketResponseError::DBAlreadyExists;
+use smol_db_client::db_settings::DBSettings;
 use cr_tile_game_common::leader_board_stat::{LeaderBoardEntry, LeaderBoardList};
 use cr_tile_game_common::packet::{ClientPacket, LoginInfo, ServerPacket};
-use smol_db_client::client_error::ClientError;
-use smol_db_client::db_settings::DBSettings;
-use smol_db_client::DBPacketResponseError::DBAlreadyExists;
-use smol_db_client::{DBSuccessResponse, SmolDbClient};
+use smol_db_client::prelude::client_error::ClientError;
+use smol_db_client::prelude::{DBSuccessResponse, SmolDbClient};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
@@ -149,13 +149,8 @@ fn handle_client(mut stream: TcpStream, client: Arc<Mutex<SmolDbClient>>) {
                                                             db_location.as_str(),
                                                             entry.clone(),
                                                         ) {
-                                                            Ok(resp_write) => match resp_write {
-                                                                _ => {
-                                                                    resp.insert(
-                                                                        db_location.to_string(),
-                                                                        entry,
-                                                                    );
-                                                                }
+                                                            Ok(_) => {
+                                                                resp.insert(db_location.to_string(),entry);
                                                             },
                                                             Err(_) => {
                                                                 break;
@@ -170,16 +165,8 @@ fn handle_client(mut stream: TcpStream, client: Arc<Mutex<SmolDbClient>>) {
                                                                 db_location.as_str(),
                                                                 entry.clone(),
                                                             ) {
-                                                                Ok(resp_write) => {
-                                                                    match resp_write {
-                                                                        _ => {
-                                                                            resp.insert(
-                                                                                db_location
-                                                                                    .to_string(),
-                                                                                entry,
-                                                                            );
-                                                                        }
-                                                                    }
+                                                                Ok(_) => {
+                                                                    resp.insert(db_location.to_string(),entry);
                                                                 }
                                                                 Err(_) => {
                                                                     break;
@@ -210,7 +197,7 @@ fn handle_client(mut stream: TcpStream, client: Arc<Mutex<SmolDbClient>>) {
                                             let ser =
                                                 serde_json::to_string(&ServerPacket::ErrorState)
                                                     .unwrap();
-                                            match stream.write(ser.as_bytes()) {
+                                            match stream.write_all(ser.as_bytes()) {
                                                 Ok(_) => {}
                                                 Err(err) => {
                                                     println!("{}", err);
@@ -223,7 +210,7 @@ fn handle_client(mut stream: TcpStream, client: Arc<Mutex<SmolDbClient>>) {
                                                 &ServerPacket::LeaderBoard(content),
                                             )
                                             .unwrap();
-                                            match stream.write(ser.as_bytes()) {
+                                            match stream.write_all(ser.as_bytes()) {
                                                 Ok(_) => {}
                                                 Err(err) => {
                                                     println!("{}", err);
@@ -246,7 +233,7 @@ fn handle_client(mut stream: TcpStream, client: Arc<Mutex<SmolDbClient>>) {
                                                     LeaderBoardList::new(list),
                                                 ))
                                                 .unwrap();
-                                            match stream.write(ser.as_bytes()) {
+                                            match stream.write_all(ser.as_bytes()) {
                                                 Ok(_) => {}
                                                 Err(err) => {
                                                     println!("{}", err);
@@ -258,7 +245,7 @@ fn handle_client(mut stream: TcpStream, client: Arc<Mutex<SmolDbClient>>) {
                                             let ser =
                                                 serde_json::to_string(&ServerPacket::ErrorState)
                                                     .unwrap();
-                                            match stream.write(ser.as_bytes()) {
+                                            match stream.write_all(ser.as_bytes()) {
                                                 Ok(_) => {}
                                                 Err(err) => {
                                                     println!("{}", err);
